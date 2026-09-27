@@ -34,16 +34,16 @@ function makeMaterials() {
     lining: new THREE.MeshStandardMaterial({ color: '#140d22', roughness: 0.9 }),
     panel: new THREE.MeshStandardMaterial({ color: '#221843', roughness: 0.45, metalness: 0.25 }),
     panelTop: new THREE.MeshPhysicalMaterial({ color: '#2d1f58', roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.3 }),
+    // one outward-facing layer per pane; only a faint sheen shows it is there
     glass: new THREE.MeshPhysicalMaterial({
-      color: '#ffffff',
-      roughness: 0.12,
-      specularIntensity: 0.25,
+      color: '#f4fbff',
+      roughness: 0.05,
+      specularIntensity: 0.6,
       metalness: 0,
       transparent: true,
-      opacity: 0.09,
+      opacity: 0.035,
       depthWrite: false,
-      envMapIntensity: 0.8,
-      side: THREE.DoubleSide,
+      envMapIntensity: 1,
     }),
     acrylic: new THREE.MeshPhysicalMaterial({
       color: '#8ffff2',
@@ -249,8 +249,15 @@ export function buildCabinet(scene, world, physMaterials) {
   }
   const paneH = CEIL_Y - FLOOR_Y;
   const paneY = (FLOOR_Y + CEIL_Y) / 2;
-  const gl = (w, dd, x, z) => box(w, paneH, dd, M.glass, x, paneY, z, { cast: false, receive: false });
-  add(gl(I * 2, 0.004, 0, H - p), gl(0.004, I * 2, -(H - p), 0), gl(0.004, I * 2, H - p, 0));
+  const pane = (x, z, rotY) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), M.glass);
+    m.position.set(x, paneY, z);
+    m.rotation.y = rotY;
+    m.renderOrder = 1;
+    return m;
+  };
+  add(pane(0, H - p, 0), pane(-(H - p), 0, -Math.PI / 2), pane(H - p, 0, Math.PI / 2), pane(0, -(H - p), Math.PI));
+  // printed back panel faces the player only, so the machine is see-through from behind
   const back = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), new THREE.MeshStandardMaterial({ map: backPanelTexture(), roughness: 0.55 }));
   back.position.set(0, paneY, -I - 0.002);
   back.receiveShadow = true;
@@ -384,7 +391,7 @@ export function buildCabinet(scene, world, physMaterials) {
 export function buildRoom(scene) {
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(30, 30),
-    new THREE.MeshStandardMaterial({ map: roomFloorTexture(), roughness: 0.3, metalness: 0.15 }),
+    new THREE.MeshStandardMaterial({ map: roomFloorTexture(), roughness: 0.55, metalness: 0.05 }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;

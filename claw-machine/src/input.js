@@ -39,7 +39,8 @@ export class Input {
       if (tag === 'BUTTON' && code === 'Enter') return;
       e.preventDefault();
       this.emit('grab');
-    } else if (code === 'KeyV') this.emit('view');
+    } else if (code === 'KeyV' || code === 'KeyE') this.emit('view', 1);
+    else if (code === 'KeyQ') this.emit('view', -1);
     else if (code === 'KeyC') this.emit('coin');
     else if (code === 'KeyM') this.emit('mute');
     else if (code === 'KeyP') this.emit('pip');

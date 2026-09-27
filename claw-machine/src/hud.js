@@ -130,7 +130,7 @@ export class Hud {
   }
 
   setView(label) {
-    this.el.viewLabel.textContent = label;
+    if (this.el.viewLabel.textContent !== label) this.el.viewLabel.textContent = label;
   }
 
   setMuted(muted) {

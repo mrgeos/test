@@ -124,11 +124,7 @@ async function main() {
   };
   setMuted(sfx.muted);
 
-  const cycleView = () => {
-    rig.cycle();
-    hud.setView(rig.label);
-    if (rig.view === 'free') hud.flash('Свободная камера: крутите мышью или пальцем', '', 2200);
-  };
+  const turnView = (dir = 1) => rig.step(dir);
 
   input.on('interact', () => {
     sfx.unlock();
@@ -142,7 +138,7 @@ async function main() {
     sfx.unlock();
     game.addCoins(5);
   });
-  input.on('view', cycleView);
+  input.on('view', turnView);
   input.on('mute', () => setMuted(!sfx.muted));
   input.on('pip', () => setPip(!pipOn));
 
@@ -155,7 +151,7 @@ async function main() {
     sfx.unlock();
     game.addCoins(5);
   });
-  on('btn-view', cycleView);
+  on('btn-view', () => turnView(1));
   on('btn-sound', () => {
     sfx.unlock();
     setMuted(!sfx.muted);
@@ -198,6 +194,11 @@ async function main() {
   game.warm = false;
   prizes.update(game.time);
   hud.loaded();
+  if (!store.get('rotateHintShown', false)) {
+    const touch = window.matchMedia('(hover: none)').matches;
+    setTimeout(() => hud.flash(touch ? 'Проведите пальцем по автомату, чтобы покрутить камеру' : 'Тяните мышью, чтобы покрутить камеру, колесо — приблизить', '', 3800), 700);
+    store.set('rotateHintShown', true);
+  }
 
   // ---------------------------------------------------------------- loop
   const pipEl = hud.el.pip;
@@ -211,7 +212,7 @@ async function main() {
     if (w < 10 || h < 10) return;
     pipCam.aspect = w / h;
     pipCam.updateProjectionMatrix();
-    const label = placePipCamera(pipCam, rig.view);
+    const label = placePipCamera(pipCam, rig.pipSide());
     if (hud.el.pipLabel.textContent !== label) hud.el.pipLabel.textContent = label;
     const x = r.left + b;
     const y = window.innerHeight - r.bottom + b;
@@ -255,6 +256,7 @@ async function main() {
     if (n === 8) acc = 0;
     game.frame(dt);
     rig.update(dt);
+    hud.setView(rig.label);
     render();
   });
 }
