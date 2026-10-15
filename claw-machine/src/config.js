@@ -61,8 +61,11 @@ export const CLAW = {
   ],
   fingerRadius: 0.0095,
 
-  swingLength: 0.4, // pendulum length used for the sway of the claw
-  swingMax: 0.03,
+  // The claw hangs as a pendulum from the point where the cable leaves the
+  // carriage; its length is the real cable length plus the hub.
+  anchorDrop: 0.03, // cable exit below the carriage centre
+  hubTop: 0.074, // cable attachment (eyelet) above the hub centre
+  swingMaxAngle: 0.3, // radians
 };
 
 export const GANTRY_Y = 1.585; // rails height

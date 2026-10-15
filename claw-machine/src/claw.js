@@ -93,6 +93,10 @@ export class Claw {
     cap.position.y = 0.033;
     const coil = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.024, 16), dark));
     coil.position.y = 0.054;
+    // swivel eyelet the cable is tied to
+    const eyelet = shadow(new THREE.Mesh(new THREE.TorusGeometry(0.0055, 0.0016, 10, 24), chrome));
+    eyelet.position.y = CLAW.hubTop - 0.0045;
+    this.hub.add(eyelet);
     // a hairline of light around the hub
     const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.0008, r + 0.0008, 0.003, 48), led);
     band.position.y = 0.006;
@@ -273,17 +277,25 @@ export class Claw {
     for (let i = 0; i < 3; i++) this.angles[i] = Math.min(CLAW.openAngle, this.angles[i] + amount);
   }
 
+  // Pendulum hanging from the cable exit: the shorter the cable, the faster
+  // and smaller the sway. Small-angle model with an accelerating pivot.
+  pendulumLength() {
+    return Math.max(0.05, CARRIAGE_Y - CLAW.anchorDrop - this.y);
+  }
+
   updateSwing(h) {
-    const w0 = Math.sqrt(9.82 / CLAW.swingLength);
-    const damp = 2 * this.swingDamping * w0;
+    const L = this.pendulumLength();
+    const w2 = 9.82 / L;
+    const damp = 2 * this.swingDamping * Math.sqrt(w2);
+    const maxS = L * Math.sin(CLAW.swingMaxAngle);
     const acc = [this.ax, this.az];
     for (let k = 0; k < 2; k++) {
       const s = k === 0 ? this.swing.x : this.swing.y;
       let sv = k === 0 ? this.swingV.x : this.swingV.y;
-      sv += (-w0 * w0 * s - damp * sv - 0.45 * acc[k]) * h;
+      sv += (-w2 * s - damp * sv - 0.8 * acc[k]) * h;
       let ns = s + sv * h;
-      if (Math.abs(ns) > CLAW.swingMax) {
-        ns = Math.sign(ns) * CLAW.swingMax;
+      if (Math.abs(ns) > maxS) {
+        ns = Math.sign(ns) * maxS;
         sv *= -0.3;
       }
       if (k === 0) {
@@ -296,32 +308,37 @@ export class Claw {
     }
   }
 
+
   // Updates every Three.js object of the claw from the current state.
   pose() {
-    const hx = this.x + this.swing.x;
-    const hz = this.z + this.swing.y;
     this.bridge.position.z = this.z;
     this.carriage.position.set(this.x, CARRIAGE_Y, this.z);
 
-    this.hub.position.set(hx, this.y, hz);
-    // the hub hangs on the cable, so it tilts towards the carriage when swinging
-    const anchor = _v.set(this.x, CARRIAGE_Y - 0.03, this.z);
-    _dir.set(hx, this.y + 0.066, hz);
-    _dir.subVectors(anchor, _dir);
-    const len = _dir.length();
-    _dir.divideScalar(len);
+    // the hub hangs on a taut cable: hub centre, eyelet and cable exit
+    // always lie on one straight line
+    const anchor = _v.set(this.x, CARRIAGE_Y - CLAW.anchorDrop, this.z);
+    const L = this.pendulumLength();
+    const sx = this.swing.x;
+    const sz = this.swing.y;
+    const drop = Math.sqrt(Math.max(L * L - sx * sx - sz * sz, 1e-6));
+    const hx = this.x + sx;
+    const hy = anchor.y - drop;
+    const hz = this.z + sz;
+    this.hub.position.set(hx, hy, hz);
+    _dir.set(-sx, drop, -sz).divideScalar(L); // from the hub towards the cable exit
     this.hub.quaternion.setFromUnitVectors(UP, _dir);
     for (let i = 0; i < 3; i++) this.pivots[i].rotation.z = this.angles[i];
     this.hub.updateMatrixWorld(true);
 
-    // the cable geometry hangs down from its origin
+    // the cable geometry hangs down from its origin and ends in the eyelet
     this.cable.position.copy(anchor);
     this.cable.quaternion.setFromUnitVectors(UP, _dir);
-    this.cable.scale.set(1, len, 1);
+    this.cable.scale.set(1, Math.max(0.001, L - CLAW.hubTop), 1);
 
-    this.hubPos.set(hx, this.y, hz);
+    this.hubPos.set(hx, hy, hz);
     this.hubVel.set(this.vx + this.swingV.x, this.vy, this.vz + this.swingV.y);
   }
+
 
   preStep(h) {
     this.updateSwing(h);
