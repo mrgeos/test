@@ -170,6 +170,17 @@ export class Claw {
 
   // ------------------------------------------------------------- movement
   driveCarriage(targetVx, targetVz, accel, h) {
+    const T = CLAW.travel;
+    // brake smoothly before the end stops instead of slamming into them
+    const limit = (v, pos) => {
+      const room = Math.max(0, v > 0 ? T - pos : pos + T);
+      const vmax = Math.sqrt(2 * 0.7 * accel * room); // margin so braking keeps up
+      return Math.max(-vmax, Math.min(vmax, v));
+    };
+    targetVx = limit(targetVx, this.x);
+    targetVz = limit(targetVz, this.z);
+    const vx0 = this.vx;
+    const vz0 = this.vz;
     const dvx = targetVx - this.vx;
     const dvz = targetVz - this.vz;
     const dv = Math.hypot(dvx, dvz);
@@ -177,11 +188,8 @@ export class Claw {
     const k = dv > maxDv ? maxDv / dv : 1;
     this.vx += dvx * k;
     this.vz += dvz * k;
-    this.ax = (dvx * k) / h;
-    this.az = (dvz * k) / h;
     this.x += this.vx * h;
     this.z += this.vz * h;
-    const T = CLAW.travel;
     if (this.x > T || this.x < -T) {
       this.x = Math.max(-T, Math.min(T, this.x));
       this.vx = 0;
@@ -190,6 +198,9 @@ export class Claw {
       this.z = Math.max(-T, Math.min(T, this.z));
       this.vz = 0;
     }
+    // the pendulum feels what the carriage really does: zero at a standstill
+    this.ax = (this.vx - vx0) / h;
+    this.az = (this.vz - vz0) / h;
   }
 
   // Moves the carriage towards a point with an accelerate / cruise / brake profile.

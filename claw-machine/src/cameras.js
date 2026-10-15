@@ -90,9 +90,15 @@ export class CameraRig {
       }
     });
 
-    el.addEventListener('pointermove', (e) => {
+    // Moves and releases are heard on the whole window, so a drag can never
+    // stay stuck when a browser or the embedding frame swallows the release.
+    window.addEventListener('pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
+      if (e.pointerType === 'mouse' && e.buttons === 0) {
+        release(e); // the button went up unseen
+        return;
+      }
       p.x = e.clientX;
       p.y = e.clientY;
       if (this.pinch && this.pointers.size >= 2) {
@@ -137,8 +143,13 @@ export class CameraRig {
         this.azVel = clamp(v, -FLICK, FLICK);
       }
     };
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', release);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', () => {
+      this.pointers.clear();
+      this.drag = null;
+      this.pinch = null;
+    });
 
     el.addEventListener(
       'wheel',

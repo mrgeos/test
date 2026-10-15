@@ -64,6 +64,7 @@ export class Input {
       this.knobEl.style.transform = `translate(${dx * radius}px, ${dy * radius}px)`;
     };
     const release = () => {
+      if (pointerId === null) return;
       pointerId = null;
       this.joy.x = this.joy.y = 0;
       this.knobEl.style.transform = '';
@@ -71,18 +72,31 @@ export class Input {
     };
     el.addEventListener('pointerdown', (e) => {
       pointerId = e.pointerId;
-      el.setPointerCapture(pointerId);
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* the window listeners below work without capture */
+      }
       el.classList.add('active');
       update(e);
       this.emit('interact');
       e.preventDefault();
     });
-    el.addEventListener('pointermove', (e) => {
-      if (e.pointerId === pointerId) update(e);
+    // Moves and releases are heard on the whole window: the stick keeps working
+    // when the pointer slides over the scene, and it can never stay stuck
+    // if a browser or the embedding frame swallows the release.
+    window.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pointerId) return;
+      if (e.pointerType === 'mouse' && e.buttons === 0) release(); // the button went up unseen
+      else update(e);
     });
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', release);
+    const end = (e) => e.pointerId === pointerId && release();
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    window.addEventListener('blur', release);
+    document.addEventListener('visibilitychange', () => document.hidden && release());
   }
+
 
   move() {
     const k = this.keys;
