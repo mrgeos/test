@@ -34,10 +34,12 @@ const plush = (hex) =>
   );
 const light = (hex, k = 0.55) => plush(`#${lighten(hex, k).getHexString()}`);
 const gloss = (hex) => cached(`gloss${hex}`, () => new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.1 }));
-const EYE = new THREE.MeshStandardMaterial({ color: '#15101a', roughness: 0.15 });
+// soft-touch paper, like a product box
+const matte = (hex) => cached(`matte${hex}`, () => new THREE.MeshStandardMaterial({ color: hex, roughness: 0.62 }));
+const EYE = new THREE.MeshStandardMaterial({ color: '#1d1d1f', roughness: 0.15 });
 const WHITE = gloss('#fbf7f2');
-const PINK = plush('#ff9cbc');
-const ORANGE = gloss('#ff9a2e');
+const PINK = plush('#f3b6c4');
+const ORANGE = gloss('#f2a65a');
 
 function part(geo, mat, r, pos, scale = [1, 1, 1], rot = null, shadow = true) {
   const m = new THREE.Mesh(geo, mat);
@@ -202,7 +204,7 @@ function buildGift([paper, ribbon]) {
   const s = 0.084;
   const r = gloss(ribbon);
   g.add(
-    part(BOX, gloss(paper), s, [0, 0, 0]),
+    part(BOX, matte(paper), s, [0, 0, 0]),
     part(BOX, r, 1, [0, 0, 0], [s + 0.002, s + 0.002, 0.018]),
     part(BOX, r, 1, [0, 0, 0], [0.018, s + 0.002, s + 0.002]),
     part(SMALL, r, 0.008, [0, s / 2 + 0.004, 0]),
@@ -215,7 +217,7 @@ function buildGift([paper, ribbon]) {
 function buildCapsule(c) {
   const g = new THREE.Group();
   const shell = cached(`shell${c}`, () =>
-    new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.55, depthWrite: false }),
+    new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.62, depthWrite: false }),
   );
   const r = 0.042;
   const top = part(TOP_HALF, shell, r, [0, 0, 0], [1, 1, 1], null, false);
@@ -224,29 +226,34 @@ function buildCapsule(c) {
     top,
     part(BOTTOM_HALF, WHITE, r, [0, 0, 0]),
     part(RING, gloss(c), 1, [0, 0, 0], [r + 0.0008, 0.007, r + 0.0008]),
-    part(SPHERE, plush(c === '#ffc940' ? '#ff4f9a' : '#ffc940'), 0.017, [0, 0.012, 0]),
+    part(SPHERE, plush(c === '#f5d77a' ? '#f0c9c6' : '#f5d77a'), 0.017, [0, 0.012, 0]),
   );
   return { group: g, shapes: [sphere(r)], mass: 0.09 };
 }
 
+// A curated, quiet palette: oat, latte, soft pastels and two greys.
 export const PRIZE_TYPES = [
-  { key: 'bear', name: 'Мишка', weight: 5, grip: 0.92, colors: ['#c98b55', '#f29bb5', '#eadbc4', '#8ec5f0', '#9be0b4'], build: buildBear },
-  { key: 'bunny', name: 'Зайка', weight: 4, grip: 0.92, colors: ['#f7f3f0', '#f7b6d0', '#c9b6f2'], build: buildBunny },
-  { key: 'cat', name: 'Котик', weight: 4, grip: 0.95, colors: ['#9aa0ae', '#f2a255', '#f4efe6', '#4a4452'], build: buildCat },
-  { key: 'duck', name: 'Утёнок', weight: 4, grip: 1, colors: ['#ffd84a'], build: buildDuck },
-  { key: 'penguin', name: 'Пингвин', weight: 3, grip: 0.95, colors: ['#26304f', '#3b4b7d'], build: buildPenguin },
-  { key: 'star', name: 'Звёздочка', weight: 3, grip: 0.85, colors: ['#ffc940', '#ff8fc8', '#7fe8ff'], build: buildStar },
-  { key: 'ball', name: 'Мячик', weight: 3, grip: 0.7, colors: [['#ff4f6d', '#ffe066'], ['#37e6d2', '#5b6cff'], ['#9bff6a', '#ff7ad9']], build: buildBall },
-  { key: 'gift', name: 'Подарок', weight: 3, grip: 0.8, colors: [['#5b6cff', '#ffc940'], ['#ff4f9a', '#ffffff'], ['#23c483', '#ff4f6d']], build: buildGift },
-  { key: 'capsule', name: 'Капсула', weight: 4, grip: 0.8, colors: ['#ff4f6d', '#37e6d2', '#ffc940', '#b98bff'], build: buildCapsule },
+  { key: 'bear', name: 'Мишка', weight: 5, grip: 0.92, colors: ['#e6d3bd', '#c4a88c', '#f0c9c6', '#bcd2e8'], build: buildBear },
+  { key: 'bunny', name: 'Зайка', weight: 4, grip: 0.92, colors: ['#f7f5f2', '#f1d3db', '#d8d0ee'], build: buildBunny },
+  { key: 'cat', name: 'Котик', weight: 4, grip: 0.95, colors: ['#d1d1d6', '#f1e1c8', '#48484a'], build: buildCat },
+  { key: 'duck', name: 'Утёнок', weight: 4, grip: 1, colors: ['#f5d77a'], build: buildDuck },
+  { key: 'penguin', name: 'Пингвин', weight: 3, grip: 0.95, colors: ['#3a3a3c', '#55657f'], build: buildPenguin },
+  { key: 'star', name: 'Звёздочка', weight: 3, grip: 0.85, colors: ['#f5d77a', '#f2c6d4', '#bfe1ee'], build: buildStar },
+  { key: 'ball', name: 'Мячик', weight: 3, grip: 0.7, colors: [['#f0c9c6', '#ffffff'], ['#bcd2e8', '#ffffff'], ['#cfe3c6', '#ffffff']], build: buildBall },
+  { key: 'gift', name: 'Подарок', weight: 3, grip: 0.8, colors: [['#ffffff', '#0071e3'], ['#ffffff', '#d9486f'], ['#f5f5f7', '#2f8f4e']], build: buildGift },
+  { key: 'capsule', name: 'Капсула', weight: 4, grip: 0.8, colors: ['#f0c9c6', '#bfe1ee', '#f5d77a', '#d8d0ee'], build: buildCapsule },
 ];
 
-const swatch = (color) => (Array.isArray(color) ? color[0] : color);
+// Colour that represents a prize in the interface (a white gift box shows its ribbon).
+const swatch = (color) => {
+  if (!Array.isArray(color)) return color;
+  return ['#ffffff', '#f5f5f7'].includes(color[0]) ? color[1] : color[0];
+};
 
 // Bakes a prize model into one mesh per material (a handful of draw calls
 // instead of a dozen) and caches it per type + colour.
 function mergedModel(type, color) {
-  return cached(`model:${type.key}:${swatch(color)}:${Array.isArray(color) ? color[1] : ''}`, () => {
+  return cached(`model:${type.key}:${[color].flat().join(',')}`, () => {
     const { group, shapes, mass } = type.build(color);
     group.updateMatrixWorld(true);
     const byMaterial = new Map();
@@ -282,6 +289,20 @@ function pickType() {
     if (r <= 0) return t;
   }
   return PRIZE_TYPES[0];
+}
+
+// A static copy of a prize for display (the store tables), resting on y = 0.
+export function displayModel(key, colorIndex = 0) {
+  const type = PRIZE_TYPES.find((t) => t.key === key);
+  const color = type.colors[colorIndex % type.colors.length];
+  const group = new THREE.Group();
+  for (const m of mergedModel(type, color).meshes) group.add(m.clone());
+  const box = new THREE.Box3().setFromObject(group);
+  group.position.y = -box.min.y;
+  const wrapper = new THREE.Group();
+  wrapper.add(group);
+  wrapper.userData.radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+  return wrapper;
 }
 
 // ------------------------------------------------------------ manager

@@ -1,70 +1,51 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { CAB, FLOOR_Y, CEIL_Y, HEADER_TOP, CHUTE, GANTRY_Y } from './config.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { CAB, FLOOR_Y, CEIL_Y, CHUTE, GANTRY_Y, FINISHES } from './config.js';
 import { addStaticBox } from './physics.js';
-import {
-  marqueeTexture,
-  backPanelTexture,
-  playFloorTexture,
-  roomFloorTexture,
-  labelTexture,
-  createLedDisplay,
-} from './textures.js';
+import { displayModel } from './prizes.js';
+import { stoneFloorTexture, oakTexture, contactShadowTexture, wordmarkTexture, createDisplay } from './textures.js';
 
-const glow = (hex, k = 2) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), toneMapped: false });
+const CORNER = 0.035; // corner radius of the unibody, in plan
+const LID = 0.075; // lid thickness
+const PASTELS = ['#9ec5ff', '#ffb8d1', '#c9b8ff', '#ffd59e', '#a8e6c9'].map((c) => new THREE.Color(c));
+const WHITE = new THREE.Color('#ffffff');
 
-export const PALETTE = {
-  candy: '#ff4f9a',
-  aqua: '#37e6d2',
-  gold: '#ffc940',
-  night: '#120a24',
-};
+const lightMat = (hex = '#ffffff', k = 1.4) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), toneMapped: false });
 
 function makeMaterials() {
   return {
-    body: new THREE.MeshPhysicalMaterial({
-      color: PALETTE.candy,
-      roughness: 0.34,
-      clearcoat: 1,
-      clearcoatRoughness: 0.12,
-    }),
-    bodyDark: new THREE.MeshPhysicalMaterial({ color: '#3a1a5c', roughness: 0.4, clearcoat: 0.6 }),
-    chrome: new THREE.MeshStandardMaterial({ color: '#e4e7ef', metalness: 1, roughness: 0.16 }),
-    darkMetal: new THREE.MeshStandardMaterial({ color: '#2a2438', metalness: 0.7, roughness: 0.45 }),
-    lining: new THREE.MeshStandardMaterial({ color: '#140d22', roughness: 0.9 }),
-    panel: new THREE.MeshStandardMaterial({ color: '#221843', roughness: 0.45, metalness: 0.25 }),
-    panelTop: new THREE.MeshPhysicalMaterial({ color: '#2d1f58', roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.3 }),
+    // bead-blasted anodised aluminium, tinted by the chosen finish
+    body: new THREE.MeshPhysicalMaterial({ color: FINISHES.silver.body, metalness: 1, roughness: 0.36, userData: { envBoost: 2.3 } }),
+    steel: new THREE.MeshPhysicalMaterial({ color: '#f2f2f4', metalness: 1, roughness: 0.08 }),
+    spaceGray: new THREE.MeshStandardMaterial({ color: '#3a3a3c', metalness: 0.6, roughness: 0.5 }),
+    interior: new THREE.MeshStandardMaterial({ color: '#2c2c2e', roughness: 0.7 }),
+    blackGlass: new THREE.MeshPhysicalMaterial({ color: '#050506', roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.02 }),
+    ceramic: new THREE.MeshPhysicalMaterial({ color: '#fbfbfd', roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.04 }),
     // one outward-facing layer per pane; only a faint sheen shows it is there
     glass: new THREE.MeshPhysicalMaterial({
       color: '#f4fbff',
       roughness: 0.05,
       specularIntensity: 0.6,
-      metalness: 0,
       transparent: true,
       opacity: 0.035,
       depthWrite: false,
-      envMapIntensity: 1,
     }),
-    acrylic: new THREE.MeshPhysicalMaterial({
-      color: '#8ffff2',
-      roughness: 0.08,
+    glassEdge: new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.1, transparent: true, opacity: 0.5, depthWrite: false }),
+    frosted: new THREE.MeshPhysicalMaterial({
+      color: '#ffffff',
+      roughness: 0.4,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.55,
       depthWrite: false,
       side: THREE.DoubleSide,
     }),
-    aquaLed: glow(PALETTE.aqua, 2.2),
-    goldLed: glow(PALETTE.gold, 2.2),
-    pinkLed: glow(PALETTE.candy, 2),
-    ceilingLight: glow('#fff4e8', 2.4),
-    redButton: new THREE.MeshPhysicalMaterial({
-      color: '#ff2a1f',
-      emissive: '#ff1a0d',
-      emissiveIntensity: 0.9,
-      roughness: 0.2,
-      clearcoat: 1,
-    }),
-    ballTop: new THREE.MeshPhysicalMaterial({ color: '#ff2a55', roughness: 0.18, clearcoat: 1 }),
+    felt: new THREE.MeshStandardMaterial({ color: '#e3e3e8', roughness: 0.95 }),
+    lightbox: new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.42, roughness: 0.9 }),
+    diffuser: lightMat('#ffffff', 1.5),
+    whiteLine: lightMat('#ffffff', 1.2),
+    statusLine: lightMat('#ffffff', 1.2),
+    buttonGlow: lightMat('#ffffff', 1.2),
   };
 }
 
@@ -81,6 +62,13 @@ function span(material, [x0, x1], [y0, y1], [z0, z1], opts) {
   return box(x1 - x0, y1 - y0, z1 - z0, material, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, opts);
 }
 
+function rounded(w, h, d, r, material, x, y, z) {
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, r), material);
+  m.position.set(x, y, z);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
 function staticSpan(world, material, [x0, x1], [y0, y1], [z0, z1]) {
   return addStaticBox(
     world,
@@ -90,6 +78,62 @@ function staticSpan(world, material, [x0, x1], [y0, y1], [z0, z1]) {
   );
 }
 
+// ------------------------------------------------------------ unibody helpers
+// Plan outlines are lists of [x, z, cornerRadius]. Shapes live in the XY plane
+// with y = -z, then get extruded upwards.
+function outline(points, path = new THREE.Shape()) {
+  const n = points.length;
+  points.forEach(([x, z, r], i) => {
+    const [px, pz] = points[(i - 1 + n) % n];
+    const [nx, nz] = points[(i + 1) % n];
+    const inLen = Math.hypot(x - px, z - pz);
+    const outLen = Math.hypot(nx - x, nz - z);
+    const ax = x + ((px - x) / inLen) * r;
+    const az = z + ((pz - z) / inLen) * r;
+    const bx = x + ((nx - x) / outLen) * r;
+    const bz = z + ((nz - z) / outLen) * r;
+    if (i === 0) path.moveTo(ax, -az);
+    else path.lineTo(ax, -az);
+    if (r > 0) path.quadraticCurveTo(x, -z, bx, -bz);
+  });
+  path.closePath();
+  return path;
+}
+
+const rect = (x0, x1, z0, z1, r) => [
+  [x0, z0, r],
+  [x1, z0, r],
+  [x1, z1, r],
+  [x0, z1, r],
+];
+
+function extrude(shape, y0, y1, material) {
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 10 });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, y0, 0);
+  const m = new THREE.Mesh(geo, material);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+// A thin tube along a plan outline: polished chamfers and light lines.
+function edgeLine(points, y, radius, material) {
+  const pts = outline(points).getPoints(12).map((p) => new THREE.Vector3(p.x, y, -p.y));
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 2, radius, 6, true), material);
+}
+
+function contactShadow(w, d, x, z, opacity = 1) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity }),
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, 0.002, z);
+  return m;
+}
+
+// ------------------------------------------------------------ machine
 export function buildCabinet(scene, world, physMaterials) {
   const M = makeMaterials();
   const root = new THREE.Group();
@@ -99,47 +143,44 @@ export function buildCabinet(scene, world, physMaterials) {
   const H = CAB.half;
   const I = CAB.inner;
   const top = FLOOR_Y - 0.002;
+  const full = rect(-H, H, -H, H, CORNER);
 
-  // ---------------------------------------------------------------- base shell
-  // Built from blocks so the prize shaft (front-left) stays hollow.
+  // ---------------------------------------------------------------- unibody
+  // Three stacked extrusions share one outline, so the walls read as a single
+  // block while the prize shaft (front-left) stays hollow.
+  add(extrude(outline(full), 0.035, CHUTE.doorBottom, M.body));
   add(
-    span(M.body, [-H, H], [0.06, top], [-H, CHUTE.minZ]),
-    span(M.body, [CHUTE.maxX, H], [0.06, top], [CHUTE.minZ, H]),
-    span(M.body, [-H, CHUTE.maxX], [0.06, CHUTE.doorBottom], [CHUTE.minZ, H]),
-    span(M.body, [-H, CHUTE.minX], [CHUTE.doorBottom, top], [CHUTE.minZ, H]),
-    span(M.body, [CHUTE.minX, CHUTE.maxX], [CHUTE.doorTop, top], [CHUTE.maxZ, H]),
-    // kick plate
-    span(M.darkMetal, [-H + 0.01, H - 0.01], [0, 0.06], [-H + 0.01, H - 0.01]),
+    extrude(
+      outline([
+        [-H, -H, CORNER],
+        [H, -H, CORNER],
+        [H, H, CORNER],
+        [CHUTE.maxX, H, 0],
+        [CHUTE.maxX, CHUTE.minZ, 0],
+        [CHUTE.minX, CHUTE.minZ, 0],
+        [CHUTE.minX, H, 0],
+        [-H, H, CORNER],
+      ]),
+      CHUTE.doorBottom,
+      CHUTE.doorTop,
+      M.body,
+    ),
   );
-  // chrome edge trims on the base
-  for (const sx of [-1, 1]) {
-    add(span(M.chrome, [sx * H - 0.006, sx * H + 0.006], [0.06, top], [H - 0.006, H + 0.006]));
-  }
-  add(span(M.aquaLed, [CHUTE.maxX + 0.02, H - 0.02], [0.1, 0.108], [H, H + 0.004], { cast: false }));
-
-  // decorative stripes on the front of the base
-  const stripe = labelTexture('ИГРАЙ  ·  ХВАТАЙ  ·  ВЫИГРЫВАЙ', { w: 1024, h: 64, size: 30, ink: '#fff2f8', glow: PALETTE.candy, bg: '#3a1a5c' });
-  const stripeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.0375), new THREE.MeshStandardMaterial({ map: stripe, roughness: 0.5 }));
-  stripeMesh.position.set((CHUTE.maxX + H) / 2, 0.2, H + 0.002);
-  add(stripeMesh);
-
-  // coin slot
-  const coinPlate = span(M.chrome, [0.24, 0.36], [0.44, 0.62], [H, H + 0.01]);
-  const coinSlot = span(M.goldLed, [0.295, 0.305], [0.5, 0.58], [H + 0.01, H + 0.013], { cast: false });
-  const coinLabel = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.1, 0.0375),
-    new THREE.MeshBasicMaterial({ map: labelTexture('ЖЕТОН', { size: 44 }), toneMapped: false }),
-  );
-  coinLabel.position.set(0.3, 0.465, H + 0.0115);
-  add(coinPlate, coinSlot, coinLabel);
+  const withShaft = outline(full);
+  withShaft.holes.push(outline(rect(CHUTE.minX, CHUTE.maxX, CHUTE.minZ, CHUTE.maxZ, 0), new THREE.Path()));
+  add(extrude(withShaft, CHUTE.doorTop, top, M.body));
+  // recessed plinth: the machine seems to float
+  add(extrude(outline(rect(-H + 0.03, H - 0.03, -H + 0.03, H - 0.03, CORNER)), 0, 0.036, M.spaceGray));
+  // diamond-cut chamfer along the top edge
+  add(edgeLine(rect(-H - 0.0004, H + 0.0004, -H - 0.0004, H + 0.0004, CORNER), top, 0.0022, M.steel));
 
   // ------------------------------------------------------------ prize shaft
   const d = 0.004;
   add(
-    span(M.lining, [CHUTE.maxX - d, CHUTE.maxX], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.maxZ + 0.04], { cast: false }),
-    span(M.lining, [CHUTE.minX, CHUTE.minX + d], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.maxZ + 0.04], { cast: false }),
-    span(M.lining, [CHUTE.minX, CHUTE.maxX], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.minZ + d], { cast: false }),
-    span(M.lining, [CHUTE.minX, CHUTE.maxX], [CHUTE.doorTop, FLOOR_Y], [CHUTE.maxZ - d, CHUTE.maxZ], { cast: false }),
+    span(M.interior, [CHUTE.maxX - d, CHUTE.maxX], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.maxZ + 0.04], { cast: false }),
+    span(M.interior, [CHUTE.minX, CHUTE.minX + d], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.maxZ + 0.04], { cast: false }),
+    span(M.interior, [CHUTE.minX, CHUTE.maxX], [CHUTE.doorBottom, FLOOR_Y], [CHUTE.minZ, CHUTE.minZ + d], { cast: false }),
+    span(M.interior, [CHUTE.minX, CHUTE.maxX], [CHUTE.doorTop, FLOOR_Y], [CHUTE.maxZ - d, CHUTE.maxZ], { cast: false }),
   );
   staticSpan(world, physMaterials.static, [CHUTE.maxX, CHUTE.maxX + 0.04], [0.3, FLOOR_Y], [CHUTE.minZ - 0.04, H]);
   staticSpan(world, physMaterials.static, [-H - 0.02, CHUTE.minX], [0.3, FLOOR_Y], [CHUTE.minZ - 0.04, H + 0.15]);
@@ -158,52 +199,44 @@ export function buildCabinet(scene, world, physMaterials) {
     const n = new THREE.Vector3(0, Math.cos(angle), Math.sin(angle));
     const mid = new THREE.Vector3(CHUTE.cx, (y0 + y1) / 2, (z0 + z1) / 2).addScaledVector(n, -thick / 2);
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-    const ramp = box(CHUTE.maxX - CHUTE.minX, thick, len, M.lining, mid.x, mid.y, mid.z, { cast: false });
+    const ramp = box(CHUTE.maxX - CHUTE.minX, thick, len, M.interior, mid.x, mid.y, mid.z, { cast: false });
     ramp.quaternion.copy(q);
     add(ramp);
     addStaticBox(world, physMaterials.static, [mid.x, mid.y, mid.z], [(CHUTE.maxX - CHUTE.minX) / 2 + 0.02, thick / 2, len / 2], new CANNON.Quaternion(q.x, q.y, q.z, q.w));
   }
 
-  // prize tray outside the door
+  // prize tray outside the door, machined from the same metal
   const trayZ1 = H + 0.13;
+  const trayW = CHUTE.maxX - CHUTE.minX + 0.02;
   add(
-    span(M.darkMetal, [CHUTE.minX - 0.01, CHUTE.maxX + 0.01], [CHUTE.doorBottom - 0.02, CHUTE.doorBottom], [H, trayZ1]),
-    span(M.chrome, [CHUTE.minX - 0.01, CHUTE.maxX + 0.01], [CHUTE.doorBottom - 0.02, CHUTE.doorBottom + 0.05], [trayZ1, trayZ1 + 0.01]),
-    span(M.chrome, [CHUTE.minX - 0.02, CHUTE.minX - 0.01], [CHUTE.doorBottom - 0.02, CHUTE.doorBottom + 0.07], [H, trayZ1 + 0.01]),
-    span(M.chrome, [CHUTE.maxX + 0.01, CHUTE.maxX + 0.02], [CHUTE.doorBottom - 0.02, CHUTE.doorBottom + 0.07], [H, trayZ1 + 0.01]),
+    rounded(trayW, 0.02, trayZ1 - H + 0.01, 0.006, M.body, CHUTE.cx, CHUTE.doorBottom - 0.01, (H + trayZ1) / 2),
+    rounded(trayW, 0.06, 0.012, 0.005, M.body, CHUTE.cx, CHUTE.doorBottom + 0.01, trayZ1 + 0.004),
+    rounded(0.012, 0.09, trayZ1 - H + 0.012, 0.005, M.body, CHUTE.minX - 0.016, CHUTE.doorBottom + 0.025, (H + trayZ1) / 2),
+    rounded(0.012, 0.09, trayZ1 - H + 0.012, 0.005, M.body, CHUTE.maxX + 0.016, CHUTE.doorBottom + 0.025, (H + trayZ1) / 2),
   );
   staticSpan(world, physMaterials.static, [CHUTE.minX - 0.02, CHUTE.maxX + 0.02], [CHUTE.doorBottom - 0.06, CHUTE.doorBottom], [H - 0.02, trayZ1]);
   staticSpan(world, physMaterials.static, [CHUTE.minX - 0.02, CHUTE.maxX + 0.02], [CHUTE.doorBottom - 0.06, CHUTE.doorBottom + 0.05], [trayZ1, trayZ1 + 0.03]);
   staticSpan(world, physMaterials.static, [CHUTE.minX - 0.05, CHUTE.minX - 0.01], [CHUTE.doorBottom - 0.06, CHUTE.doorBottom + 0.1], [H, trayZ1 + 0.03]);
   staticSpan(world, physMaterials.static, [CHUTE.maxX + 0.01, CHUTE.maxX + 0.05], [CHUTE.doorBottom - 0.06, CHUTE.doorBottom + 0.1], [H, trayZ1 + 0.03]);
 
-  // door frame + swinging flap
-  add(
-    span(M.chrome, [CHUTE.minX - 0.012, CHUTE.maxX + 0.012], [CHUTE.doorTop, CHUTE.doorTop + 0.012], [H, H + 0.008]),
-    span(M.chrome, [CHUTE.minX - 0.012, CHUTE.minX], [CHUTE.doorBottom, CHUTE.doorTop], [H, H + 0.008]),
-    span(M.chrome, [CHUTE.maxX, CHUTE.maxX + 0.012], [CHUTE.doorBottom, CHUTE.doorTop], [H, H + 0.008]),
-  );
+  // smoked-glass flap, hinged at the top of the door
+  const doorW = CHUTE.maxX - CHUTE.minX;
+  const doorH = CHUTE.doorTop - CHUTE.doorBottom;
   const flap = new THREE.Group();
-  flap.position.set(CHUTE.cx, CHUTE.doorTop, H + 0.012);
+  flap.position.set(CHUTE.cx, CHUTE.doorTop, H + 0.0015);
+  // outline() maps plan z to -y, so this pane hangs straight down from the hinge
+  const flapShape = outline(rect(-doorW / 2 + 0.004, doorW / 2 - 0.004, 0.004, doorH - 0.004, 0.014));
   const flapPane = new THREE.Mesh(
-    new THREE.PlaneGeometry(CHUTE.maxX - CHUTE.minX, CHUTE.doorTop - CHUTE.doorBottom),
-    new THREE.MeshPhysicalMaterial({ color: '#2a1a40', roughness: 0.15, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+    new THREE.ShapeGeometry(flapShape, 8),
+    new THREE.MeshPhysicalMaterial({ color: '#1d1d1f', roughness: 0.12, transparent: true, opacity: 0.62, side: THREE.DoubleSide }),
   );
-  flapPane.position.y = -(CHUTE.doorTop - CHUTE.doorBottom) / 2;
   flap.add(flapPane);
-  const flapLabel = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.14, 0.05),
-    new THREE.MeshBasicMaterial({ map: labelTexture('ПРИЗ', { size: 52, bg: '#1a0f2e' }), toneMapped: false }),
-  );
-  flapLabel.position.set(0, -0.06, 0.001);
-  flap.add(flapLabel);
   add(flap);
 
   // ------------------------------------------------------------ play floor
-  const floorMat = new THREE.MeshStandardMaterial({ map: playFloorTexture(), roughness: 0.85 });
   add(
-    span(floorMat, [-I, I], [FLOOR_Y - 0.1, FLOOR_Y], [-I, CHUTE.minZ], { cast: false }),
-    span(floorMat, [CHUTE.maxX, I], [FLOOR_Y - 0.1, FLOOR_Y], [CHUTE.minZ, I], { cast: false }),
+    span(M.felt, [-I, I], [FLOOR_Y - 0.012, FLOOR_Y], [-I, CHUTE.minZ - 0.001], { cast: false }),
+    span(M.felt, [CHUTE.maxX + 0.001, I], [FLOOR_Y - 0.012, FLOOR_Y], [CHUTE.minZ - 0.001, I], { cast: false }),
   );
   staticSpan(world, physMaterials.static, [-H, H], [FLOOR_Y - 0.1, FLOOR_Y], [-H, CHUTE.minZ]);
   staticSpan(world, physMaterials.static, [CHUTE.maxX, H], [FLOOR_Y - 0.1, FLOOR_Y], [CHUTE.minZ, H]);
@@ -216,227 +249,282 @@ export function buildCabinet(scene, world, physMaterials) {
   staticSpan(world, physMaterials.static, [-H - 0.1, H + 0.1], wallH, [I, I + 0.1]);
   staticSpan(world, physMaterials.static, [-H, H], [CEIL_Y, CEIL_Y + 0.1], [-H, H]);
 
-  // chute guard (acrylic) with a glowing rim
+  // chute guard: frosted glass with a hairline of light on top
   const t = CHUTE.guardThickness;
   const gTop = FLOOR_Y + CHUTE.guardHeight;
   const guardX = { x: [CHUTE.maxX, CHUTE.maxX + t], z: [CHUTE.minZ - t, CHUTE.maxZ] };
   const guardZ = { x: [CHUTE.minX, CHUTE.maxX + t], z: [CHUTE.minZ - t, CHUTE.minZ] };
   for (const g of [guardX, guardZ]) {
-    add(span(M.acrylic, g.x, [FLOOR_Y, gTop], g.z, { cast: false, receive: false }));
-    add(span(M.goldLed, g.x, [gTop, gTop + 0.006], g.z, { cast: false }));
+    add(span(M.frosted, g.x, [FLOOR_Y, gTop], g.z, { cast: false, receive: false }));
+    add(span(M.whiteLine, g.x, [gTop, gTop + 0.003], g.z, { cast: false }));
     staticSpan(world, physMaterials.static, g.x, [FLOOR_Y - 0.02, gTop], g.z);
   }
-  const prizeSticker = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.16, 0.06),
-    new THREE.MeshBasicMaterial({ map: labelTexture('ПРИЗ', { size: 56, bg: '#241036' }), toneMapped: false, transparent: true, opacity: 0.9 }),
-  );
-  prizeSticker.position.set(CHUTE.cx, FLOOR_Y + 0.062, CHUTE.minZ + 0.001);
-  add(prizeSticker);
   // the claw may not pass through the guard: exposed as blockers
   const clawBlockers = [guardX, guardZ].map((g) => ({
     min: new THREE.Vector3(g.x[0], FLOOR_Y, g.z[0]),
     max: new THREE.Vector3(g.x[1], gTop + 0.006, g.z[1]),
   }));
 
-  // ------------------------------------------------------ posts, glass, header
-  const p = CAB.post;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      add(box(p * 2, CEIL_Y - FLOOR_Y, p * 2, M.body, sx * (H - p), (FLOOR_Y + CEIL_Y) / 2, sz * (H - p)));
-    }
-    // LED strips on the front posts
-    add(box(0.006, CEIL_Y - FLOOR_Y - 0.02, 0.006, M.aquaLed, sx * (I - 0.001), (FLOOR_Y + CEIL_Y) / 2, H - 0.001, { cast: false }));
-  }
+  // ------------------------------------------------------ frameless glass
+  const g = H - CAB.post; // pane plane
   const paneH = CEIL_Y - FLOOR_Y;
   const paneY = (FLOOR_Y + CEIL_Y) / 2;
   const pane = (x, z, rotY) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), M.glass);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(g * 2, paneH), M.glass);
     m.position.set(x, paneY, z);
     m.rotation.y = rotY;
     m.renderOrder = 1;
     return m;
   };
-  add(pane(0, H - p, 0), pane(-(H - p), 0, -Math.PI / 2), pane(H - p, 0, Math.PI / 2), pane(0, -(H - p), Math.PI));
-  // printed back panel faces the player only, so the machine is see-through from behind
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), new THREE.MeshStandardMaterial({ map: backPanelTexture(), roughness: 0.55 }));
+  add(pane(0, g, 0), pane(-g, 0, -Math.PI / 2), pane(g, 0, Math.PI / 2), pane(0, -g, Math.PI));
+  // polished glass edges where the panes meet
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(box(0.0026, paneH, 0.0026, M.glassEdge, sx * g, paneY, sz * g, { cast: false, receive: false }));
+
+  // the back is a lightbox: an evenly lit white field behind the toys.
+  // It faces the player only, so the machine stays see-through from behind.
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), M.lightbox);
   back.position.set(0, paneY, -I - 0.002);
-  back.receiveShadow = true;
   add(back);
-  // glass bottom rails
-  add(
-    span(M.chrome, [-I, I], [FLOOR_Y, FLOOR_Y + 0.015], [I, H - p]),
-    span(M.chrome, [-H + p, -I], [FLOOR_Y, FLOOR_Y + 0.015], [-I, I]),
-    span(M.chrome, [I, H - p], [FLOOR_Y, FLOOR_Y + 0.015], [-I, I]),
-  );
 
-  // header box
-  add(span(M.body, [-H, H], [CEIL_Y, HEADER_TOP], [-H, H]));
-  add(span(M.chrome, [-H - 0.004, H + 0.004], [CEIL_Y - 0.006, CEIL_Y + 0.008], [-H - 0.004, H + 0.004]));
-  add(span(M.chrome, [-H - 0.004, H + 0.004], [HEADER_TOP - 0.008, HEADER_TOP + 0.006], [-H - 0.004, H + 0.004]));
-  // light panel in the ceiling
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(I * 1.7, I * 1.7), M.ceilingLight);
+  // ------------------------------------------------------------ lid
+  add(extrude(outline(full), CEIL_Y, CEIL_Y + LID, M.body));
+  add(edgeLine(rect(-H - 0.0004, H + 0.0004, -H - 0.0004, H + 0.0004, CORNER), CEIL_Y + LID, 0.0022, M.steel));
+  // status light: a single line of light under the lid
+  add(edgeLine(rect(-H + 0.009, H - 0.009, -H + 0.009, H - 0.009, CORNER - 0.009), CEIL_Y - 0.0035, 0.0024, M.statusLine));
+  // diffuser across the whole ceiling
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(g * 2, g * 2), M.diffuser);
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEIL_Y - 0.003, 0);
+  ceiling.position.set(0, CEIL_Y - 0.002, 0);
   add(ceiling);
-
-  const marquee = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.74, 0.162),
-    new THREE.MeshBasicMaterial({ map: marqueeTexture('ХВАТАЙКА', 'АВТОМАТ С ИГРУШКАМИ'), toneMapped: false }),
+  // the name, engraved
+  const wordmark = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.26, 0.0325),
+    new THREE.MeshBasicMaterial({ map: wordmarkTexture('Хватайка'), transparent: true, depthWrite: false }),
   );
-  marquee.material.color.setScalar(1.25);
-  marquee.position.set(0, (CEIL_Y + HEADER_TOP) / 2, H + 0.003);
-  add(marquee);
-
-  // chasing bulbs around the marquee
-  const bulbPositions = [];
-  const bx = 0.405;
-  const by = 0.094;
-  const cy = (CEIL_Y + HEADER_TOP) / 2;
-  const cols = 19;
-  for (let i = 0; i < cols; i++) bulbPositions.push([-bx + (i / (cols - 1)) * bx * 2, cy + by]);
-  for (let i = 1; i < 4; i++) bulbPositions.push([bx, cy + by - (i / 4) * by * 2]);
-  for (let i = cols - 1; i >= 0; i--) bulbPositions.push([-bx + (i / (cols - 1)) * bx * 2, cy - by]);
-  for (let i = 3; i >= 1; i--) bulbPositions.push([-bx, cy + by - (i / 4) * by * 2]);
-  const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.0072, 12, 8), new THREE.MeshBasicMaterial({ toneMapped: false }), bulbPositions.length);
-  const mtx = new THREE.Matrix4();
-  bulbPositions.forEach(([x, y], i) => {
-    mtx.makeTranslation(x, y, H + 0.006);
-    bulbs.setMatrixAt(i, mtx);
-    bulbs.setColorAt(i, new THREE.Color(0, 0, 0));
-  });
-  add(bulbs);
-
-  // star topper
-  const starShape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? 0.075 : 0.034;
-    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
-    if (i === 0) starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  const topper = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(starShape, { depth: 0.02, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 3 }),
-    new THREE.MeshPhysicalMaterial({ color: PALETTE.gold, emissive: '#ffae00', emissiveIntensity: 0.6, metalness: 0.3, roughness: 0.25, clearcoat: 1 }),
-  );
-  topper.geometry.center();
-  topper.position.set(0, HEADER_TOP + 0.09, 0.2);
-  topper.castShadow = true;
-  const topperStand = box(0.012, 0.03, 0.012, M.chrome, 0, HEADER_TOP + 0.015, 0.2);
-  add(topper, topperStand);
+  wordmark.position.set(0, CEIL_Y + LID / 2, H + 0.0008);
+  add(wordmark);
 
   // gantry rails (the moving bridge belongs to the claw)
   for (const sx of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, I * 2, 12), M.chrome);
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, I * 2, 16), M.steel);
     rail.rotation.x = Math.PI / 2;
     rail.position.set(sx * (I - 0.016), GANTRY_Y, 0);
     rail.castShadow = true;
     add(rail);
-    add(span(M.darkMetal, [sx * (I - 0.004) - 0.004, sx * (I - 0.004) + 0.004], [GANTRY_Y - 0.01, CEIL_Y], [-I, I]));
+    add(span(M.body, [sx * (I - 0.004) - 0.004, sx * (I - 0.004) + 0.004], [GANTRY_Y - 0.008, CEIL_Y], [-I, I]));
   }
 
-  // --------------------------------------------------------- control panel
-  const panel = new THREE.Group();
-  panel.position.set(0, 0.795, H + 0.075);
-  panel.rotation.x = 0.13;
-  add(panel);
-  const pbox = box(H * 2 + 0.02, 0.08, 0.16, M.panel, 0, 0, 0);
-  panel.add(pbox);
-  panel.add(box(H * 2 + 0.024, 0.012, 0.012, M.aquaLed, 0, 0.02, 0.082, { cast: false }));
-  panel.add(box(H * 2 + 0.03, 0.01, 0.17, M.panelTop, 0, 0.042, 0));
-  panel.add(box(H * 2 + 0.034, 0.006, 0.006, M.chrome, 0, 0.044, 0.085));
+  // --------------------------------------------------------- control deck
+  const deck = new THREE.Group();
+  deck.position.set(0, 0.8, H + 0.075);
+  deck.rotation.x = 0.1;
+  add(deck);
+  deck.add(rounded(H * 2 - 0.03, 0.03, 0.16, 0.012, M.body, 0, 0, 0));
+  const surface = 0.015;
 
-  const joyBase = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.036, 0.008, 24), M.darkMetal);
-  joyBase.position.set(-0.19, 0.049, 0.01);
-  panel.add(joyBase);
+  const joyBase = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.004, 48), M.steel);
+  joyBase.position.set(-0.2, surface + 0.002, 0.01);
+  deck.add(joyBase);
   const joystick = new THREE.Group();
-  joystick.position.set(-0.19, 0.052, 0.01);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.07, 12), M.chrome);
-  shaft.position.y = 0.035;
-  const ballTop = new THREE.Mesh(new THREE.SphereGeometry(0.019, 24, 16), M.ballTop);
-  ballTop.position.y = 0.074;
-  shaft.castShadow = ballTop.castShadow = true;
-  joystick.add(shaft, ballTop);
-  panel.add(joystick);
+  joystick.position.set(-0.2, surface + 0.004, 0.01);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.052, 16), M.steel);
+  shaft.position.y = 0.026;
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.017, 32, 24), M.ceramic);
+  knob.position.y = 0.056;
+  shaft.castShadow = knob.castShadow = true;
+  joystick.add(shaft, knob);
+  deck.add(joystick);
 
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.042, 0.01, 32), M.chrome);
-  ring.position.set(0.19, 0.051, 0.01);
-  panel.add(ring);
-  const button = new THREE.Mesh(new THREE.SphereGeometry(0.032, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), M.redButton);
-  button.scale.y = 0.5;
-  button.position.set(0.19, 0.055, 0.01);
-  panel.add(button);
+  // the button: black glass in a polished steel ring
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.006, 64), M.steel);
+  ring.position.set(0.2, surface + 0.003, 0.01);
+  deck.add(ring);
+  const button = new THREE.Group();
+  button.position.set(0.2, surface + 0.005, 0.01);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.006, 64), M.blackGlass);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.0332, 0.0013, 8, 64), M.buttonGlow);
+  halo.rotation.x = Math.PI / 2;
+  halo.position.y = 0.0032;
+  button.add(disc, halo);
+  deck.add(button);
 
-  const led = createLedDisplay();
-  const ledMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.06875), new THREE.MeshBasicMaterial({ map: led.texture, toneMapped: false }));
-  ledMesh.material.color.setScalar(1.4);
-  ledMesh.rotation.x = -Math.PI / 2;
-  ledMesh.position.set(0, 0.049, 0.0);
-  panel.add(ledMesh);
-  panel.add(box(0.235, 0.004, 0.082, M.darkMetal, 0, 0.0465, 0.0, { cast: false }));
+  const display = createDisplay();
+  deck.add(rounded(0.25, 0.006, 0.08, 0.003, M.blackGlass, 0, surface + 0.001, 0));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.236, 0.074), new THREE.MeshBasicMaterial({ map: display.texture, toneMapped: false }));
+  screen.rotation.x = -Math.PI / 2;
+  screen.position.set(0, surface + 0.0042, 0);
+  deck.add(screen);
+
+  // ---------------------------------------------------------- finish & light
+  let accent = new THREE.Color(FINISHES.silver.accent);
+  let accentHex = FINISHES.silver.accent;
+  const tmp = new THREE.Color();
+
+  function setFinish(key) {
+    const f = FINISHES[key] ?? FINISHES.silver;
+    M.body.color.set(f.body);
+    accent = new THREE.Color(f.accent);
+    accentHex = f.accent;
+  }
+
+  // The status line breathes when idle, glows in the accent colour while you
+  // play, and drifts through soft colours after a win.
+  function updateLights(state, t, sinceWin) {
+    if (sinceWin >= 0 && sinceWin < 3.5) {
+      const f = (t * 0.9) % PASTELS.length;
+      tmp.copy(PASTELS[Math.floor(f)]).lerp(PASTELS[(Math.floor(f) + 1) % PASTELS.length], f % 1).multiplyScalar(1.15);
+    } else if (state === 'idle') tmp.copy(WHITE).multiplyScalar(0.8 + 0.2 * Math.sin(t * 1.6));
+    else if (state === 'play') tmp.copy(accent).multiplyScalar(1.15);
+    else tmp.copy(accent).multiplyScalar(0.85 + 0.3 * Math.sin(t * 6));
+    M.statusLine.color.copy(tmp);
+    if (state === 'idle' || state === 'play') M.buttonGlow.color.copy(accent).multiplyScalar(state === 'play' ? 1.2 : 0.7 + 0.3 * Math.sin(t * 1.6));
+    else M.buttonGlow.color.setScalar(0.15);
+  }
 
   return {
     root,
     joystick,
     button,
     buttonRestY: button.position.y,
-    led,
+    led: { draw: (coins, time, prizes) => display.draw(coins, time, prizes, accentHex) },
     flap,
-    topper,
-    bulbs,
     clawBlockers,
+    setFinish,
+    updateLights,
   };
 }
 
-// Room around the machine: tiled floor, back wall with neon, soft contact shadow.
+// ------------------------------------------------------------ the store
+const SCREEN_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+// Slow, soft colour fields, like a wallpaper on a large display.
+const SCREEN_FRAG = /* glsl */ `
+uniform float uTime;
+uniform vec3 uA;
+uniform vec3 uB;
+uniform vec3 uC;
+uniform vec3 uBase;
+varying vec2 vUv;
+float field(vec2 p, vec2 c, float k) { vec2 d = p - c; return exp(-dot(d, d) * k); }
+void main() {
+  vec2 p = vUv * vec2(2.37, 1.0);
+  float t = uTime * 0.06;
+  vec2 c1 = vec2(0.6 + 0.45 * sin(t * 1.3), 0.45 + 0.3 * cos(t * 1.1));
+  vec2 c2 = vec2(1.7 + 0.5 * cos(t * 0.9), 0.5 + 0.35 * sin(t * 1.7));
+  vec2 c3 = vec2(1.2 + 0.6 * sin(t * 0.7 + 1.0), 0.6 + 0.3 * sin(t * 1.2 + 2.0));
+  vec3 col = uBase;
+  col = mix(col, uA, field(p, c1, 2.0));
+  col = mix(col, uB, field(p, c2, 1.8));
+  col = mix(col, uC, field(p, c3, 2.4));
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+function oakTable(oak, x, z, rotY, products) {
+  const table = new THREE.Group();
+  table.position.set(x, 0, z);
+  table.rotation.y = rotY;
+  const len = 2.4;
+  const width = 0.9;
+  const topY = 0.86;
+  const slab = new THREE.Mesh(new RoundedBoxGeometry(len, 0.06, width, 3, 0.012), oak);
+  slab.position.y = topY - 0.03;
+  table.add(slab);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, topY - 0.06, 0.07), oak);
+      leg.position.set(sx * (len / 2 - 0.16), (topY - 0.06) / 2, sz * (width / 2 - 0.12));
+      table.add(leg);
+    }
+  }
+  table.add(contactShadow(len + 0.5, width + 0.4, 0, 0, 0.8));
+  // products laid out with even spacing, like a store display
+  products.forEach(([key, colorIndex], i) => {
+    const item = displayModel(key, colorIndex);
+    const px = -len / 2 + 0.3 + i * ((len - 0.6) / (products.length - 1));
+    item.position.set(px, topY, 0.05);
+    item.rotation.y = -rotY + (i % 2 ? 0.25 : -0.25);
+    table.add(item);
+    const r = item.userData.radius;
+    const s = contactShadow(r * 3.2, r * 3.2, px, 0.05, 0.9);
+    s.position.y = topY + 0.001;
+    table.add(s);
+  });
+  return table;
+}
+
+function tree(x, z, seed) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  let s = seed;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const planter = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.6, 0.46, 64), new THREE.MeshStandardMaterial({ color: '#dcd8d1', roughness: 0.8 }));
+  planter.position.y = 0.23;
+  const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.02, 48), new THREE.MeshStandardMaterial({ color: '#4a3f36', roughness: 1 }));
+  soil.position.y = 0.45;
+  const bark = new THREE.MeshStandardMaterial({ color: '#8a7058', roughness: 0.9 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.06, 2.2, 12), bark);
+  trunk.position.y = 1.5;
+  g.add(planter, soil, trunk);
+  const leaves = [new THREE.MeshStandardMaterial({ color: '#7f9c6c', roughness: 1 }), new THREE.MeshStandardMaterial({ color: '#6d8b5d', roughness: 1 })];
+  const blob = new THREE.SphereGeometry(1, 20, 14);
+  for (let i = 0; i < 11; i++) {
+    const m = new THREE.Mesh(blob, leaves[i % 2]);
+    const r = 0.3 + rnd() * 0.22;
+    m.scale.setScalar(r);
+    m.position.set((rnd() - 0.5) * 1.0, 2.35 + (rnd() - 0.3) * 0.8, (rnd() - 0.5) * 1.0);
+    g.add(m);
+  }
+  g.add(contactShadow(1.7, 1.7, 0, 0, 0.9));
+  return g;
+}
+
 export function buildRoom(scene) {
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 30),
-    new THREE.MeshStandardMaterial({ map: roomFloorTexture(), roughness: 0.55, metalness: 0.05 }),
-  );
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ map: stoneFloorTexture(40), roughness: 0.72 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
+  scene.add(contactShadow(1.6, 1.75, 0, 0.06, 1));
 
-  // contact shadow under the cabinet
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
-  g.addColorStop(0, 'rgba(0,0,0,0.8)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  const blob = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.7, 1.7),
-    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }),
-  );
-  blob.rotation.x = -Math.PI / 2;
-  blob.position.y = 0.002;
-  scene.add(blob);
-
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), new THREE.MeshStandardMaterial({ color: '#1c1033', roughness: 0.9 }));
-  wall.position.set(0, 4, -3.2);
+  // the forum: a wall with a large display and a long oak bench
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(16, 6), new THREE.MeshStandardMaterial({ color: '#ebe8e3', roughness: 0.95 }));
+  wall.position.set(0, 3, -4.8);
   scene.add(wall);
-
-  // neon tubes on the wall
-  const tube = (points, color) => {
-    const curve = new THREE.CatmullRomCurve3(points.map(([x, y]) => new THREE.Vector3(x, y, -3.15)));
-    const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.018, 8, false), glow(color, 2.6));
-    scene.add(m);
+  const bezel = new THREE.Mesh(new THREE.PlaneGeometry(6.48, 2.78), new THREE.MeshStandardMaterial({ color: '#111113', roughness: 0.3 }));
+  bezel.position.set(0, 2.35, -4.79);
+  scene.add(bezel);
+  const uniforms = {
+    uTime: { value: 0 },
+    uA: { value: new THREE.Color('#9ec5ff') },
+    uB: { value: new THREE.Color('#ffb8d1') },
+    uC: { value: new THREE.Color('#c9b8ff') },
+    uBase: { value: new THREE.Color('#ffe2c4') },
   };
-  const wave = [];
-  for (let i = 0; i <= 24; i++) wave.push([-5 + i * 0.42, 2.9 + Math.sin(i * 0.9) * 0.12]);
-  tube(wave, PALETTE.candy);
-  const wave2 = [];
-  for (let i = 0; i <= 24; i++) wave2.push([-5 + i * 0.42, 2.55 + Math.sin(i * 0.9 + 1.4) * 0.1]);
-  tube(wave2, PALETTE.aqua);
-  const zig = [];
-  for (let i = 0; i <= 6; i++) zig.push([2.6 + i * 0.28, 1.6 + (i % 2) * 0.3]);
-  tube(zig, PALETTE.gold);
-  const circle = [];
-  for (let i = 0; i <= 40; i++) {
-    const a = (i / 40) * Math.PI * 2;
-    circle.push([-2.9 + Math.cos(a) * 0.45, 1.8 + Math.sin(a) * 0.45]);
-  }
-  tube(circle, PALETTE.aqua);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.7), new THREE.ShaderMaterial({ uniforms, vertexShader: SCREEN_VERT, fragmentShader: SCREEN_FRAG }));
+  screen.position.set(0, 2.35, -4.78);
+  scene.add(screen);
+
+  const oak = new THREE.MeshStandardMaterial({ map: oakTexture(), roughness: 0.55 });
+  const bench = new THREE.Mesh(new RoundedBoxGeometry(6.4, 0.44, 0.5, 3, 0.02), oak);
+  bench.position.set(0, 0.22, -4.2);
+  scene.add(bench, contactShadow(7, 1.1, 0, -4.2, 0.8));
+
+  scene.add(
+    oakTable(oak, -2.3, -0.8, Math.PI / 2, [['bear', 0], ['bunny', 1], ['cat', 1], ['duck', 0], ['penguin', 0]]),
+    oakTable(oak, 2.3, -0.8, Math.PI / 2, [['star', 0], ['gift', 0], ['bear', 3], ['capsule', 1], ['bunny', 2]]),
+    tree(-3.7, -3.3, 7),
+    tree(3.8, -3.1, 19),
+  );
+
+  return {
+    update(t) {
+      uniforms.uTime.value = t;
+    },
+  };
 }

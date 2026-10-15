@@ -23,9 +23,6 @@ export const store = {
 const HOLD_STATES = new Set(['ascend', 'top', 'return']);
 const CALM_STATES = new Set(['settle', 'close', 'grip']);
 
-const BULB_ON = new THREE.Color(4, 2.9, 1.3);
-const BULB_OFF = new THREE.Color(0.32, 0.16, 0.08);
-const RAINBOW = ['#ff4f9a', '#ffc940', '#37e6d2', '#b98bff', '#ffffff'].map((c) => new THREE.Color(c).multiplyScalar(3.2));
 
 export class Game {
   constructor({ world, claw, prizes, cabinet, hud, sfx, input, rig }) {
@@ -80,27 +77,27 @@ export class Game {
     if (!DIFFICULTY[key]) return;
     this.difficulty = key;
     store.set('difficulty', key);
-    this.hud.flash(`Режим «${DIFFICULTY[key].label}»: ${DIFFICULTY[key].hint.toLowerCase()}`, '', 2600);
+    this.hud.flash(`Хватка «${DIFFICULTY[key].label}». ${DIFFICULTY[key].hint}`, '', 2600);
   }
 
   restock() {
     if (this.state !== 'idle') {
-      this.hud.flash('Дождитесь конца раунда', 'warn');
+      this.hud.flash('Дождитесь конца раунда.', 'warn');
       return;
     }
     const missing = PRIZE_COUNT - this.prizes.activeCount();
     if (missing <= 0) {
-      this.hud.flash('Автомат уже полон');
+      this.hud.flash('Автомат уже полон.');
       return;
     }
     this.prizes.fill(missing, FLOOR_Y + 0.42);
     this.settleUntil = this.time + 3;
-    this.hud.flash(`Добавлено игрушек: ${missing}`, 'good');
+    this.hud.flash(`Добавлено игрушек: ${missing}.`, 'good');
   }
 
   resetAll() {
     if (this.state !== 'idle') {
-      this.hud.flash('Дождитесь конца раунда', 'warn');
+      this.hud.flash('Дождитесь конца раунда.', 'warn');
       return false;
     }
     this.coins = START_COINS;
@@ -121,21 +118,21 @@ export class Game {
     this.state = s;
     this.stateTime = 0;
     if (s === 'idle') this.#promptIdle();
-    else if (s === 'play') this.hud.prompt('Наведите клешню на игрушку и жмите «Хватай»');
-    else if (s === 'open') this.hud.prompt('Опускаем клешню…');
-    else if (s === 'ascend') this.hud.prompt(this.held.length ? 'Поднимаем…' : 'Кажется, пусто…');
-    else if (s === 'return') this.hud.prompt(this.held.length ? 'Несём к окошку выдачи…' : 'Возвращаемся…');
+    else if (s === 'play') this.hud.prompt('Наведите клешню и нажмите «Опустить».');
+    else if (s === 'open') this.hud.prompt('Опускается…');
+    else if (s === 'ascend') this.hud.prompt(this.held.length ? 'Поднимается…' : 'Пусто. Бывает.');
+    else if (s === 'return') this.hud.prompt(this.held.length ? 'Несём к выдаче…' : 'Возвращается…');
     else if (s === 'release') this.hud.prompt('');
   }
 
   #promptIdle() {
-    if (this.coins > 0) this.hud.prompt('Двигайте джойстик или жмите «Хватай», чтобы начать');
-    else this.hud.prompt('Жетоны закончились — нажмите «+5»', 'warn');
+    if (this.coins > 0) this.hud.prompt('Двигайте джойстик или нажмите «Опустить».');
+    else this.hud.prompt('Жетоны закончились. Нажмите «+5».', 'warn');
   }
 
   #startRound() {
     if (this.coins <= 0) {
-      this.hud.flash('Нет жетонов — нажмите «+5»', 'warn');
+      this.hud.flash('Нет жетонов. Нажмите «+5».', 'warn');
       this.sfx.lose();
       return;
     }
@@ -146,6 +143,7 @@ export class Game {
     this.lastTick = ROUND_TIME;
     this.roundWins = 0;
     this.inRound = true;
+    this.hud.hideHint();
     this.sfx.start();
     this.setState('play');
   }
@@ -161,7 +159,7 @@ export class Game {
     if (this.roundWins > 0) this.lossStreak = 0;
     else {
       this.lossStreak++;
-      this.hud.flash('Мимо! Ещё попытку?', 'warn', 2200);
+      this.hud.flash('Почти. Ещё раз?', 'warn', 2200);
       this.sfx.lose();
     }
     this.setState('idle');
@@ -195,7 +193,7 @@ export class Game {
       this.held.push({ prize, assist, out: 0 });
     }
     this.touches.clear();
-    if (this.held.length) this.hud.flash('Есть захват!', 'good', 1200);
+    if (this.held.length) this.hud.flash('Есть захват.', 'good', 1200);
   }
 
   // Soft "grip" forces: support against gravity plus a spring that keeps the
@@ -226,10 +224,10 @@ export class Game {
     const before = this.held.length;
     this.held = this.held.filter((hd) => hd.out < 0.15 && hd.prize.state === 'active');
     if (this.held.length < before && this.state !== 'return') {
-      this.hud.flash('Ой! Выскользнул…', 'warn');
+      this.hud.flash('Выскользнула.', 'warn');
       this.sfx.slip();
     } else if (this.held.length < before) {
-      this.hud.flash('Уронили по дороге…', 'warn');
+      this.hud.flash('Упала по дороге.', 'warn');
       this.sfx.slip();
     }
   }
@@ -246,7 +244,7 @@ export class Game {
     this.collection.set(prize.name, entry);
     this.hud.renderCollection(this.collection);
     this.hud.showWin(prize.name, prize.color);
-    this.hud.flash(`Приз: ${prize.name}!`, 'win', 2600);
+    this.hud.flash(`${prize.name} — в вашей коллекции.`, 'win', 2600);
     this.sfx.win();
     this.winFx = this.time;
   }
@@ -415,13 +413,13 @@ export class Game {
     // prize door flap swings when a prize comes out
     const since = t - this.winFx;
     cabinet.flap.rotation.x = since > 0.35 && since < 1.6 ? -0.85 * Math.sin((Math.PI * (since - 0.35)) / 1.25) : 0;
-    cabinet.topper.rotation.y = t * 0.8;
-    this.#updateBulbs(t, since);
+    const mood = this.state === 'idle' || this.state === 'play' ? this.state : 'busy';
+    cabinet.updateLights(mood, t, since);
 
     const secs = this.state === 'play' ? Math.max(0, Math.ceil(this.timer)) : null;
     cabinet.led.draw(this.coins, secs, this.wins);
     hud.setStats({ coins: this.coins, wins: this.wins, tries: this.tries });
-    hud.setTimer(secs);
+    hud.setTimer(secs, this.state === 'play' ? Math.max(0, this.timer) / ROUND_TIME : 0);
     hud.setGrabIdle(this.state !== 'idle' && this.state !== 'play');
     if (secs !== null && secs !== this.lastTick) {
       if (secs <= 5 && secs > 0) this.sfx.tick();
@@ -431,19 +429,5 @@ export class Game {
     const horizontal = Math.hypot(claw.vx, claw.vz) / CLAW.moveSpeed;
     const vertical = Math.abs(claw.vy) / CLAW.dropSpeed;
     this.sfx.motor(Math.max(horizontal, vertical), vertical > 0.1 ? 1.6 : 0.7);
-  }
-
-  #updateBulbs(t, sinceWin) {
-    const bulbs = this.cabinet.bulbs;
-    const n = bulbs.count;
-    for (let i = 0; i < n; i++) {
-      let color;
-      if (sinceWin >= 0 && sinceWin < 3.5) color = RAINBOW[(i + Math.floor(t * 14)) % RAINBOW.length];
-      else if (this.state === 'play') color = (i + Math.floor(t * 4)) % 2 ? BULB_ON : BULB_OFF;
-      else if (this.state === 'idle') color = (i - Math.floor(t * 9)) % 6 === 0 || (i - Math.floor(t * 9) + 1) % 6 === 0 ? BULB_ON : BULB_OFF;
-      else color = (i - Math.floor(t * 22)) % 4 === 0 ? BULB_ON : BULB_OFF;
-      bulbs.setColorAt(i, color);
-    }
-    bulbs.instanceColor.needsUpdate = true;
   }
 }

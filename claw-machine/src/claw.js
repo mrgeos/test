@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CAB, CLAW, CARRIAGE_Y, GANTRY_Y } from './config.js';
 import { createKinematic, driveKinematic, snapKinematic, placeKinematic } from './physics.js';
 
@@ -40,11 +41,14 @@ export class Claw {
   }
 
   #buildMeshes(scene) {
-    const chrome = new THREE.MeshStandardMaterial({ color: '#e8ebf2', metalness: 1, roughness: 0.14 });
-    const dark = new THREE.MeshStandardMaterial({ color: '#2b2540', metalness: 0.6, roughness: 0.4 });
-    const gold = new THREE.MeshStandardMaterial({ color: '#ffc940', metalness: 0.9, roughness: 0.25 });
-    const rubber = new THREE.MeshStandardMaterial({ color: '#3a3346', roughness: 0.7 });
-    const led = new THREE.MeshBasicMaterial({ color: new THREE.Color('#37e6d2').multiplyScalar(2.4), toneMapped: false });
+    const chrome = new THREE.MeshPhysicalMaterial({ color: '#f2f2f4', metalness: 1, roughness: 0.08 });
+    // aluminium parts follow the cabinet finish (see setFinish)
+    this.alu = new THREE.MeshPhysicalMaterial({ color: '#d5d7da', metalness: 1, roughness: 0.36 });
+    const alu = this.alu;
+    const dark = new THREE.MeshStandardMaterial({ color: '#3a3a3c', metalness: 0.6, roughness: 0.5 });
+    const cableMat = new THREE.MeshStandardMaterial({ color: '#b8b8bd', metalness: 0.8, roughness: 0.4 });
+    const silicone = new THREE.MeshStandardMaterial({ color: '#f5f5f7', roughness: 0.55 });
+    const led = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff').multiplyScalar(1.4), toneMapped: false });
     const shadow = (m) => {
       m.castShadow = true;
       m.receiveShadow = true;
@@ -54,9 +58,9 @@ export class Claw {
     // bridge spanning X, travels along Z on the rails
     const railX = CAB.inner - 0.016;
     this.bridge = new THREE.Group();
-    this.bridge.add(shadow(new THREE.Mesh(new THREE.BoxGeometry(railX * 2, 0.016, 0.028), dark)));
+    this.bridge.add(shadow(new THREE.Mesh(new RoundedBoxGeometry(railX * 2, 0.016, 0.028, 3, 0.005), alu)));
     for (const sx of [-1, 1]) {
-      const shoe = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.05), dark));
+      const shoe = shadow(new THREE.Mesh(new RoundedBoxGeometry(0.03, 0.03, 0.05, 3, 0.006), alu));
       shoe.position.set(sx * railX, 0.012, 0);
       this.bridge.add(shoe);
     }
@@ -65,7 +69,7 @@ export class Claw {
 
     // carriage with winch drum
     this.carriage = new THREE.Group();
-    this.carriage.add(shadow(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.036, 0.06), chrome)));
+    this.carriage.add(shadow(new THREE.Mesh(new RoundedBoxGeometry(0.075, 0.036, 0.06, 4, 0.01), alu)));
     const drum = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 16), dark));
     drum.rotation.z = Math.PI / 2;
     drum.position.y = -0.024;
@@ -78,18 +82,19 @@ export class Claw {
     // cable: unit-length cylinder hanging down from its origin
     const cableGeo = new THREE.CylinderGeometry(0.0022, 0.0022, 1, 6);
     cableGeo.translate(0, -0.5, 0);
-    this.cable = shadow(new THREE.Mesh(cableGeo, dark));
+    this.cable = shadow(new THREE.Mesh(cableGeo, cableMat));
     scene.add(this.cable);
 
     // hub
     this.hub = new THREE.Group();
     const r = CLAW.hubRadius;
-    const body = shadow(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.92, 0.046, 32), chrome));
-    const cap = shadow(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r, 0.02, 32), chrome));
+    const body = shadow(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.92, 0.046, 48), alu));
+    const cap = shadow(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r, 0.02, 48), chrome));
     cap.position.y = 0.033;
     const coil = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.024, 16), dark));
     coil.position.y = 0.054;
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.001, r + 0.001, 0.007, 32), gold);
+    // a hairline of light around the hub
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.0008, r + 0.0008, 0.003, 48), led);
     band.position.y = 0.006;
     const base = shadow(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r * 0.7, 0.01, 32), dark));
     base.position.y = CLAW.hingeY - 0.002;
@@ -103,7 +108,7 @@ export class Claw {
     const knuckleGeo = new THREE.CylinderGeometry(0.0085, 0.0085, 0.02, 16);
     knuckleGeo.rotateX(Math.PI / 2);
     const tipGeo = new THREE.SphereGeometry(0.0092, 16, 12);
-    const bracketGeo = new THREE.BoxGeometry(0.018, 0.014, 0.024);
+    const bracketGeo = new RoundedBoxGeometry(0.018, 0.014, 0.024, 2, 0.003);
 
     this.pivots = [];
     this.tipLocal = path[path.length - 1].clone();
@@ -111,13 +116,13 @@ export class Claw {
       const mount = new THREE.Group();
       mount.position.set(Math.cos(phi) * CLAW.hingeRadius, CLAW.hingeY, Math.sin(phi) * CLAW.hingeRadius);
       mount.rotation.y = -phi;
-      const bracket = shadow(new THREE.Mesh(bracketGeo, dark));
+      const bracket = shadow(new THREE.Mesh(bracketGeo, alu));
       bracket.position.set(-0.004, 0.004, 0);
       mount.add(bracket);
       const pivot = new THREE.Group();
       pivot.add(shadow(new THREE.Mesh(prongGeo, chrome)));
       pivot.add(shadow(new THREE.Mesh(knuckleGeo, chrome)));
-      const tip = shadow(new THREE.Mesh(tipGeo, rubber));
+      const tip = shadow(new THREE.Mesh(tipGeo, silicone));
       tip.position.copy(this.tipLocal);
       pivot.add(tip);
       mount.add(pivot);
@@ -153,6 +158,10 @@ export class Claw {
       pivot.getWorldQuaternion(_q);
       placeKinematic(this.fingerBodies[i], _p, _q);
     });
+  }
+
+  setFinish(bodyColor) {
+    this.alu.color.set(bodyColor);
   }
 
   // ------------------------------------------------------------- movement

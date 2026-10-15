@@ -9,6 +9,8 @@ export class Hud {
       collection: $('collection'),
       timer: $('timer'),
       timerValue: $('timer-value'),
+      timerRing: $('timer-ring'),
+      soundToggle: $('opt-sound'),
       message: $('message'),
       winCard: $('win-card'),
       winName: $('win-name'),
@@ -25,6 +27,7 @@ export class Hud {
       confetti: $('confetti'),
       joystick: $('joystick'),
       knob: $('joy-knob'),
+      hint: $('keys-hint'),
     };
     this.persistent = { text: '', tone: '' };
     this.flashTimer = 0;
@@ -49,21 +52,23 @@ export class Hud {
     set('tries', tries);
   }
 
-  setTimer(seconds) {
+  // Activity-ring style countdown: `fraction` is the share of time left.
+  setTimer(seconds, fraction = 1) {
     const t = this.el.timer;
     if (seconds === null) {
       t.hidden = true;
       return;
     }
     t.hidden = false;
-    this.el.timerValue.textContent = seconds;
+    if (this.el.timerValue.textContent !== String(seconds)) this.el.timerValue.textContent = seconds;
+    this.el.timerRing.style.strokeDashoffset = String(100 - Math.max(0, Math.min(1, fraction)) * 100);
     t.classList.toggle('urgent', seconds <= 5);
   }
 
   #show(text, tone) {
     const m = this.el.message;
     m.textContent = text;
-    m.className = `message ${tone}`;
+    m.className = `message glass ${tone}`;
     m.hidden = !text;
   }
 
@@ -85,7 +90,7 @@ export class Hud {
 
   showWin(name, color) {
     const { winCard, winName, winSwatch } = this.el;
-    winName.textContent = name;
+    winName.textContent = `${name}.`;
     winSwatch.style.setProperty('--c', color);
     winCard.hidden = true;
     void winCard.offsetWidth;
@@ -114,9 +119,9 @@ export class Hud {
   }
 
   confetti() {
-    const colors = ['#ff4f9a', '#37e6d2', '#ffc940', '#ffffff', '#b98bff'];
+    const colors = ['#9ec5ff', '#ffb8d1', '#c9b8ff', '#ffd59e', '#a8e6c9'];
     const box = this.el.confetti;
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 44; i++) {
       const p = document.createElement('i');
       p.style.left = `${Math.random() * 100}%`;
       p.style.setProperty('--c', colors[i % colors.length]);
@@ -135,6 +140,7 @@ export class Hud {
 
   setMuted(muted) {
     this.el.sound.setAttribute('aria-pressed', String(!muted));
+    this.el.soundToggle.checked = !muted;
   }
 
   toggleSettings(open = this.el.settings.hidden) {
@@ -150,6 +156,11 @@ export class Hud {
     const b = this.el.grab;
     b.classList.add('pressed');
     setTimeout(() => b.classList.remove('pressed'), 160);
+  }
+
+  // The keyboard hint is onboarding: it goes away once a round has started.
+  hideHint() {
+    this.el.hint.hidden = true;
   }
 
   loaded() {

@@ -78,22 +78,34 @@ export const PRIZE_COUNT = 46;
 // The greedy mode imitates real mall machines.
 export const DIFFICULTY = {
   easy: {
-    label: 'Лёгкий',
-    hint: 'Клешня держит мёртвой хваткой',
+    label: 'Лёгкая',
+    hint: 'Если клешня обхватила игрушку, она её донесёт.',
     roll: () => ({ strength: 1.25, weaken: 1, relax: 0, minAssist: 1.12 }),
   },
   fair: {
-    label: 'Честный',
-    hint: 'Физика и немного удачи',
+    label: 'Честная',
+    hint: 'Всё решают точность и физика.',
     roll: () => ({ strength: 0.85 + Math.random() * 0.25, weaken: 0.9, relax: 0.03 }),
   },
   greedy: {
     label: 'Как в ТЦ',
-    hint: 'Хватка слабеет наверху, щедрый раунд — редкость',
+    hint: 'Наверху хватка слабеет. Как в настоящем автомате.',
     roll: (lossStreak) => {
       const strongChance = Math.min(0.85, 0.1 + lossStreak * 0.09);
       if (Math.random() < strongChance) return { strength: 1, weaken: 0.9, relax: 0.03, strong: true };
       return { strength: 0.3 + Math.random() * 0.3, weaken: 0.55, relax: 0.13 };
     },
   },
+};
+
+// Anodised aluminium finishes. `body` tints the metal, `accent` drives the
+// status light and the interface accent so both always match.
+export const FINISHES = {
+  silver: { label: 'Серебристый', body: '#d5d7da', accent: '#0071e3' },
+  blue: { label: 'Синий', body: '#a8c1dc', accent: '#2a6fd6' },
+  green: { label: 'Зелёный', body: '#b3cdae', accent: '#2f8f4e' },
+  pink: { label: 'Розовый', body: '#e8bdbd', accent: '#d9486f' },
+  yellow: { label: 'Жёлтый', body: '#ecd8a0', accent: '#c48a00' },
+  orange: { label: 'Оранжевый', body: '#ebb898', accent: '#e0632a' },
+  purple: { label: 'Фиолетовый', body: '#c5badf', accent: '#7656d1' },
 };

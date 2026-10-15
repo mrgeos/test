@@ -2,11 +2,10 @@ import './style.css';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import { FLOOR_Y, CEIL_Y, PRIZE_COUNT } from './config.js';
+import { FLOOR_Y, CEIL_Y, PRIZE_COUNT, FINISHES, DIFFICULTY } from './config.js';
 import { createWorld } from './physics.js';
 import { buildCabinet, buildRoom } from './cabinet.js';
 import { Claw } from './claw.js';
@@ -22,25 +21,22 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
 async function fontsReady() {
   if (!document.fonts) return;
-  const faces = ['800 64px Unbounded', '600 32px Unbounded', '500 20px Rubik', '700 20px Rubik'];
+  const faces = ['500 30px Inter', '600 104px Inter', '600 84px Inter'];
   await Promise.race([Promise.all(faces.map((f) => document.fonts.load(f))).catch(() => {}), new Promise((r) => setTimeout(r, 2500))]);
 }
 
+// Soft, high-key daylight: a bright sky dome, a gentle key light and a fill.
 function addLights(scene) {
-  scene.add(new THREE.HemisphereLight('#9a8cff', '#1a0f2e', 0.45));
+  scene.add(new THREE.HemisphereLight('#ffffff', '#d9d3ca', 1.1));
 
-  const key = new THREE.DirectionalLight('#ffe9f4', 1.1);
-  key.position.set(1.8, 3.5, 3);
-  scene.add(key);
+  const key = new THREE.DirectionalLight('#fffaf2', 1.5);
+  key.position.set(2.5, 5, 3.5);
+  const fill = new THREE.DirectionalLight('#eef3ff', 0.55);
+  fill.position.set(-3, 3, -2);
+  scene.add(key, fill);
 
-  const pink = new THREE.PointLight('#ff4f9a', 4, 7, 1.6);
-  pink.position.set(-1.7, 1.7, 1.3);
-  const aqua = new THREE.PointLight('#37e6d2', 3.5, 7, 1.6);
-  aqua.position.set(1.8, 1.4, 1.1);
-  scene.add(pink, aqua);
-
-  // light panel inside the machine, casts the shadows of the claw and the toys
-  const spot = new THREE.SpotLight('#fff1e2', 1.3, 2, 1.05, 0.75, 1.2);
+  // the diffuser inside the lid casts the shadows of the claw and the toys
+  const spot = new THREE.SpotLight('#ffffff', 1.5, 2, 1.1, 0.9, 1.2);
   spot.position.set(0, CEIL_Y - 0.03, 0.06);
   spot.target.position.set(0, FLOOR_Y, 0);
   spot.castShadow = true;
@@ -60,17 +56,19 @@ async function main() {
   let pixelRatio = Math.min(window.devicePixelRatio, 2);
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  // neutral tone mapping keeps whites white and pastels true, like product shots
+  renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0d0720');
-  scene.fog = new THREE.Fog('#0d0720', 5, 13);
+  scene.background = new THREE.Color('#f5f5f7');
+  scene.fog = new THREE.Fog('#f5f5f7', 7, 17);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.3;
+  const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envMap;
+  scene.environmentIntensity = 0.85;
 
   const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.05, 40);
   const pipCam = new THREE.PerspectiveCamera(34, 4 / 3, 0.05, 40);
@@ -78,7 +76,7 @@ async function main() {
   await fontsReady();
 
   addLights(scene);
-  buildRoom(scene);
+  const room = buildRoom(scene);
   const { world, materials } = createWorld();
   const cabinet = buildCabinet(scene, world, materials);
   const claw = new Claw(scene, world, materials);
@@ -88,11 +86,20 @@ async function main() {
   const sfx = new Sfx(store.get('muted', false));
   const game = new Game({ world, claw, prizes, cabinet, hud, sfx, input, rig });
 
-  // post-processing: bloom makes the LEDs and bulbs glow
+  // Metal needs brighter reflections than the rest of the scene to read as
+  // aluminium and polished steel (scene.environmentIntensity applies to all).
+  scene.traverse((o) => {
+    for (const m of [o.material].flat()) {
+      if (m?.metalness >= 0.9 && !m.envMap) {
+        m.envMap = envMap;
+        m.envMapIntensity = m.userData.envBoost ?? 1.5;
+      }
+    }
+  });
+
+  // crisp image, no glow: the composer only adds multisampling and output
   const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 1.25);
-  composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
   const resize = () => {
@@ -157,6 +164,12 @@ async function main() {
     setMuted(!sfx.muted);
   });
   on('btn-settings', () => hud.toggleSettings());
+  on('btn-settings-done', () => hud.toggleSettings(false));
+  const soundToggle = document.getElementById('opt-sound');
+  soundToggle.addEventListener('change', () => {
+    sfx.unlock();
+    setMuted(!soundToggle.checked);
+  });
   on('btn-restock', () => {
     game.restock();
     hud.toggleSettings(false);
@@ -165,10 +178,46 @@ async function main() {
     if (game.resetAll()) hud.toggleSettings(false);
   });
   pipToggle.addEventListener('change', () => setPip(pipToggle.checked));
+  const diffNote = document.getElementById('diff-note');
+  diffNote.textContent = DIFFICULTY[game.difficulty].hint;
   for (const radio of document.querySelectorAll('input[name="difficulty"]')) {
     radio.checked = radio.value === game.difficulty;
-    radio.addEventListener('change', () => radio.checked && game.setDifficulty(radio.value));
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      game.setDifficulty(radio.value);
+      diffNote.textContent = DIFFICULTY[radio.value].hint;
+    });
   }
+
+  // finishes: the metal, the claw and the interface accent change together
+  const swatches = document.getElementById('swatches');
+  const finishName = document.getElementById('finish-name');
+  const setFinish = (key) => {
+    const f = FINISHES[key] ?? FINISHES.silver;
+    cabinet.setFinish(key);
+    claw.setFinish(f.body);
+    document.documentElement.style.setProperty('--accent', f.accent);
+    finishName.textContent = f.label;
+    store.set('finish', key);
+  };
+  const savedFinish = FINISHES[store.get('finish', 'silver')] ? store.get('finish', 'silver') : 'silver';
+  for (const [key, f] of Object.entries(FINISHES)) {
+    const label = document.createElement('label');
+    label.title = f.label;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'finish';
+    input.value = key;
+    input.id = `finish-${key}`;
+    input.checked = key === savedFinish;
+    input.setAttribute('aria-label', f.label);
+    input.addEventListener('change', () => input.checked && setFinish(key));
+    const dot = document.createElement('span');
+    dot.style.setProperty('--c', f.body);
+    label.append(input, dot);
+    swatches.append(label);
+  }
+  setFinish(savedFinish);
   canvas.addEventListener('pointerdown', () => {
     sfx.unlock();
     hud.toggleSettings(false);
@@ -255,6 +304,7 @@ async function main() {
     }
     if (n === 8) acc = 0;
     game.frame(dt);
+    room.update(game.time);
     rig.update(dt);
     hud.setView(rig.label);
     render();

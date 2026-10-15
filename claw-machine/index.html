@@ -4,14 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Хватайка</title>
-    <meta name="description" content="3D-симулятор автомата с игрушками (claw machine) на three.js с физикой." />
-    <meta name="theme-color" content="#120a24" />
+    <meta name="description" content="3D-симулятор автомата с игрушками на three.js с физикой." />
+    <meta name="theme-color" content="#f5f5f7" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Unbounded:wght@600;800&display=swap"
-    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   </head>
   <body>
     <div id="app">
@@ -20,65 +17,96 @@
       <div class="hud" id="hud">
         <div class="topbar">
           <div class="left">
-            <div class="stats">
-              <div class="stat coins"><span class="stat-label">Жетоны</span><span class="stat-value" id="stat-coins">10</span></div>
-              <div class="stat wins"><span class="stat-label">Призы</span><span class="stat-value" id="stat-wins">0</span></div>
+            <div class="stats glass">
+              <div class="stat"><span class="stat-label">Жетоны</span><span class="stat-value" id="stat-coins">10</span></div>
+              <div class="stat"><span class="stat-label">Призы</span><span class="stat-value" id="stat-wins">0</span></div>
               <div class="stat tries"><span class="stat-label">Попытки</span><span class="stat-value" id="stat-tries">0</span></div>
             </div>
             <div class="collection" id="collection" aria-label="Выигранные призы"></div>
           </div>
           <div class="tools">
-            <button class="tool" id="btn-view" type="button" title="Повернуть камеру к следующей стороне (V)">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <button class="tool glass" id="btn-view" type="button" title="Повернуть камеру к следующей стороне (V)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2" /><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" /><path d="M17.6 3.4v3.5h-3.5" /><path d="M6.4 20.6v-3.5h3.5" /></svg>
               <span id="view-label">Спереди</span>
             </button>
-            <button class="tool icon" id="btn-sound" type="button" title="Звук (M)" aria-pressed="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path class="cross" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <button class="tool glass icon" id="btn-sound" type="button" title="Звук (M)" aria-pressed="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z" class="fill" /><path class="wave" d="M15.5 9.2a4 4 0 0 1 0 5.6M18 6.8a7.4 7.4 0 0 1 0 10.4" /><path class="cross" d="M16 9.5l5 5M21 9.5l-5 5" /></svg>
               <span class="sr-only">Звук</span>
             </button>
-            <button class="tool icon" id="btn-settings" type="button" title="Настройки" aria-expanded="false" aria-controls="settings">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h9M18 7h1M5 17h1M10 17h9M5 12h4M13 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="11" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            <button class="tool glass icon" id="btn-settings" type="button" title="Настройки" aria-expanded="false" aria-controls="settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M4 12h4M12 12h8" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /><circle cx="10" cy="12" r="2" /></svg>
               <span class="sr-only">Настройки</span>
             </button>
           </div>
         </div>
 
-        <div class="timer" id="timer" hidden><span id="timer-value">30</span><small>сек</small></div>
+        <div class="timer glass" id="timer" hidden>
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle class="track" cx="32" cy="32" r="27" pathLength="100" />
+            <circle class="progress" id="timer-ring" cx="32" cy="32" r="27" pathLength="100" />
+          </svg>
+          <span id="timer-value">30</span>
+        </div>
 
         <section class="settings" id="settings" hidden aria-label="Настройки">
-          <h2>Настройки автомата</h2>
-          <fieldset>
-            <legend>Хватка клешни</legend>
-            <label class="choice"><input type="radio" name="difficulty" value="easy" id="diff-easy" /><span><b>Лёгкий</b><small>Клешня держит мёртвой хваткой</small></span></label>
-            <label class="choice"><input type="radio" name="difficulty" value="fair" id="diff-fair" /><span><b>Честный</b><small>Физика и немного удачи</small></span></label>
-            <label class="choice"><input type="radio" name="difficulty" value="greedy" id="diff-greedy" /><span><b>Как в ТЦ</b><small>Хватка слабеет наверху, щедрый раунд — редкость</small></span></label>
-          </fieldset>
-          <label class="switch"><input type="checkbox" id="opt-pip" /> Окно с видом сбоку</label>
-          <button class="wide" id="btn-restock" type="button">Пополнить автомат</button>
-          <button class="wide ghost" id="btn-reset" type="button">Начать заново</button>
+          <header class="sheet-head">
+            <h2>Настройки</h2>
+            <button class="done" id="btn-settings-done" type="button">Готово</button>
+          </header>
+
+          <div class="group">
+            <div class="group-title">Хватка</div>
+            <div class="segmented" role="radiogroup" aria-label="Хватка клешни">
+              <label><input type="radio" name="difficulty" value="easy" id="diff-easy" /><span>Лёгкая</span></label>
+              <label><input type="radio" name="difficulty" value="fair" id="diff-fair" /><span>Честная</span></label>
+              <label><input type="radio" name="difficulty" value="greedy" id="diff-greedy" /><span>Как в ТЦ</span></label>
+            </div>
+            <p class="group-note" id="diff-note"></p>
+          </div>
+
+          <div class="group">
+            <div class="group-title">Цвет <span id="finish-name">Серебристый</span></div>
+            <div class="swatches" id="swatches" role="radiogroup" aria-label="Цвет автомата"></div>
+          </div>
+
+          <div class="list">
+            <label class="row"><span>Вид сбоку</span><input type="checkbox" class="toggle" id="opt-pip" /></label>
+            <label class="row"><span>Звук</span><input type="checkbox" class="toggle" id="opt-sound" /></label>
+          </div>
+
+          <div class="list">
+            <button class="row action" id="btn-restock" type="button">Пополнить автомат</button>
+            <button class="row action danger" id="btn-reset" type="button">Начать заново</button>
+          </div>
         </section>
 
-        <div class="pip" id="pip" hidden><span id="pip-label">Сбоку</span></div>
+        <div class="pip" id="pip" hidden><span id="pip-label">Справа</span></div>
 
         <div class="center">
           <div class="win-card" id="win-card" hidden>
-            <div class="win-eyebrow">Приз!</div>
             <div class="win-swatch" id="win-swatch"></div>
-            <div class="win-name" id="win-name">Мишка</div>
+            <div class="win-eyebrow">Знакомьтесь.</div>
+            <div class="win-name" id="win-name">Мишка.</div>
+            <div class="win-sub">Теперь в вашей коллекции.</div>
           </div>
-          <div class="message" id="message" role="status" aria-live="polite"></div>
+          <div class="message glass" id="message" role="status" aria-live="polite" hidden></div>
         </div>
 
         <div class="bottombar">
-          <div class="joystick" id="joystick" role="application" aria-label="Джойстик: перетащите, чтобы двигать клешню">
+          <div class="joystick glass" id="joystick" role="application" aria-label="Джойстик: перетащите, чтобы двигать клешню">
             <div class="joy-knob" id="joy-knob"></div>
           </div>
-          <div class="keys-hint" id="keys-hint">
-            <kbd>WASD</kbd>/<kbd>←↑→↓</kbd> двигать · <kbd>Пробел</kbd> хватать · мышь или <kbd>Q</kbd>/<kbd>E</kbd> камера · <kbd>C</kbd> жетоны · <kbd>M</kbd> звук
+          <div class="keys-hint glass" id="keys-hint">
+            <kbd>WASD</kbd> двигать · <kbd>Пробел</kbd> опустить · мышь или <kbd>Q</kbd> <kbd>E</kbd> камера · <kbd>C</kbd> жетоны · <kbd>M</kbd> звук
           </div>
           <div class="actions">
-            <button class="coin-btn" id="btn-coin" type="button" title="Добавить жетоны (C)"><span class="coin-disc" aria-hidden="true"></span>+5</button>
-            <button class="grab-btn" id="btn-grab" type="button" title="Хватать (Пробел)"><span>Хватай</span></button>
+            <button class="coin-btn glass" id="btn-coin" type="button" title="Добавить 5 жетонов (C)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12" /></svg>5
+            </button>
+            <div class="grab-wrap">
+              <button class="grab-btn" id="btn-grab" type="button" title="Опустить клешню (Пробел)" aria-label="Опустить клешню"><span class="shutter"></span></button>
+              <span class="grab-label" aria-hidden="true">Опустить</span>
+            </div>
           </div>
         </div>
 
@@ -86,8 +114,8 @@
       </div>
 
       <div class="loading" id="loading">
-        <div class="loading-title">ХВАТАЙКА</div>
-        <p id="loading-text">Загружаем игрушки в автомат…</p>
+        <div class="loading-title">Хватайка</div>
+        <p id="loading-text">Цепляет.</p>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>
