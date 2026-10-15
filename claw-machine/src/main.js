@@ -2,8 +2,8 @@ import './style.css';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { FLOOR_Y, CEIL_Y, PRIZE_COUNT, FINISHES, DIFFICULTY } from './config.js';
 import { createWorld } from './physics.js';
@@ -15,6 +15,7 @@ import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { CameraRig, placePipCamera } from './cameras.js';
+import { createStudio } from './studio.js';
 
 const STEP = 1 / 120;
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
@@ -40,12 +41,36 @@ function addLights(scene) {
   spot.position.set(0, CEIL_Y - 0.03, 0.06);
   spot.target.position.set(0, FLOOR_Y, 0);
   spot.castShadow = true;
-  spot.shadow.mapSize.set(1024, 1024);
   spot.shadow.camera.near = 0.1;
   spot.shadow.camera.far = 1.5;
-  spot.shadow.bias = -0.0004;
-  spot.shadow.normalBias = 0.01;
+  spot.shadow.bias = -0.0003;
+  spot.shadow.normalBias = 0.008;
   scene.add(spot, spot.target);
+  return spot;
+}
+
+// Soft, sharp-enough shadows from a large map, or a cheap map for weak devices.
+function setShadowQuality(spot, high) {
+  const size = high ? 2048 : 1024;
+  spot.shadow.radius = high ? 2 : 1.5;
+  if (spot.shadow.mapSize.x === size) return;
+  spot.shadow.mapSize.set(size, size);
+  spot.shadow.dispose();
+  spot.shadow.map = null;
+}
+
+// Glass and other see-through meshes would hide the toys from the AO pass, and
+// thin light lines (e.g. on the chute guard) would only add noise.
+class SolidAOPass extends GTAOPass {
+  _overrideVisibility() {
+    super._overrideVisibility();
+    this.scene.traverse((o) => {
+      if (o.isMesh && o.visible && (o.material.transparent || o.material.isMeshBasicMaterial)) {
+        o.visible = false;
+        this._visibilityCache.push(o);
+      }
+    });
+  }
 }
 
 async function main() {
@@ -61,12 +86,20 @@ async function main() {
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // rendered once per frame (see render), not again for the AO pass and the side view
+  renderer.shadowMap.autoUpdate = false;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#f5f5f7');
   scene.fog = new THREE.Fog('#f5f5f7', 7, 17);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const studio = createStudio();
+  const envMap = pmrem.fromScene(studio, 0.04).texture;
+  pmrem.dispose();
+  studio.traverse((o) => {
+    o.geometry?.dispose();
+    o.material?.dispose();
+  });
   scene.environment = envMap;
   scene.environmentIntensity = 0.85;
 
@@ -75,7 +108,7 @@ async function main() {
 
   await fontsReady();
 
-  addLights(scene);
+  const spot = addLights(scene);
   const room = buildRoom(scene);
   const { world, materials } = createWorld();
   const cabinet = buildCabinet(scene, world, materials);
@@ -97,9 +130,20 @@ async function main() {
     }
   });
 
-  // crisp image, no glow: the composer only adds multisampling and output
+  // crisp image, no glow: multisampling, ambient occlusion and output
   const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
   composer.addPass(new RenderPass(scene, camera));
+  // sizes are in metres: the toys are about 10 cm
+  const gtao = new SolidAOPass(
+    scene,
+    camera,
+    1,
+    1,
+    undefined,
+    { radius: 0.12, thickness: 0.15, distanceExponent: 1.5, scale: 1.2, samples: 16 },
+    { radius: 9, samples: 24, lumaPhi: 14, depthPhi: 2, normalPhi: 3 },
+  );
+  composer.addPass(gtao);
   composer.addPass(new OutputPass());
 
   const resize = () => {
@@ -123,6 +167,19 @@ async function main() {
     store.set('pip', on);
   };
   setPip(pipOn);
+
+  // improved graphics: ambient occlusion and soft shadows; off by default on touch screens
+  let slowTime = 0;
+  const hqToggle = document.getElementById('opt-hq');
+  const setHq = (on, persist = true) => {
+    hqToggle.checked = on;
+    gtao.enabled = on;
+    setShadowQuality(spot, on);
+    slowTime = 0;
+    if (persist) store.set('hq', on);
+  };
+  setHq(store.get('hq', !window.matchMedia('(hover: none)').matches), false);
+  hqToggle.addEventListener('change', () => setHq(hqToggle.checked));
 
   const setMuted = (m) => {
     sfx.setMuted(m);
@@ -252,6 +309,7 @@ async function main() {
   // ---------------------------------------------------------------- loop
   const pipEl = hud.el.pip;
   const render = () => {
+    renderer.shadowMap.needsUpdate = true;
     composer.render();
     if (!pipOn) return;
     const r = pipEl.getBoundingClientRect();
@@ -273,19 +331,21 @@ async function main() {
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
   };
 
-  // Adaptive resolution: if frames stay slow, render fewer pixels.
-  let slowTime = 0;
+  // Adaptive quality: if frames stay slow, drop the improved graphics, then render fewer pixels.
   let avgDt = 1 / 60;
   const adaptQuality = (rawDt) => {
     avgDt += (rawDt - avgDt) * 0.05;
     slowTime = avgDt > 1 / 40 ? slowTime + rawDt : 0;
-    if (slowTime > 2 && pixelRatio > 1) {
+    if (slowTime < 2) return;
+    if (gtao.enabled && pixelRatio <= 1.5) {
+      setHq(false, false);
+    } else if (pixelRatio > 1) {
       pixelRatio = Math.max(1, pixelRatio - 0.25);
       renderer.setPixelRatio(pixelRatio);
       composer.setPixelRatio(pixelRatio);
       resize();
-      slowTime = 0;
     }
+    slowTime = 0;
   };
 
   let acc = 0;

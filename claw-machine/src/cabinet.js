@@ -4,16 +4,18 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { CAB, FLOOR_Y, CEIL_Y, CHUTE, GANTRY_Y, FINISHES } from './config.js';
 import { addStaticBox } from './physics.js';
 import { displayModel } from './prizes.js';
-import { stoneFloorTexture, oakTexture, contactShadowTexture, wordmarkTexture, createDisplay } from './textures.js';
+import { stoneFloorTexture, oakTexture, contactShadowTexture, wordmarkTexture, createDisplay, grilleTextures, fabricTextures, lightPanelTexture } from './textures.js';
 
 const CORNER = 0.035; // corner radius of the unibody, in plan
 const LID = 0.075; // lid thickness
 const PASTELS = ['#9ec5ff', '#ffb8d1', '#c9b8ff', '#ffd59e', '#a8e6c9'].map((c) => new THREE.Color(c));
 const WHITE = new THREE.Color('#ffffff');
 
-const lightMat = (hex = '#ffffff', k = 1.4) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), toneMapped: false });
+const lightMat = (hex = '#ffffff', k = 1.4, map = null) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), map, toneMapped: false });
 
 function makeMaterials() {
+  const fabric = fabricTextures();
+  const grille = grilleTextures(CAB.inner * 2, CEIL_Y - FLOOR_Y);
   return {
     // bead-blasted anodised aluminium, tinted by the chosen finish
     body: new THREE.MeshPhysicalMaterial({ color: FINISHES.silver.body, metalness: 1, roughness: 0.36, userData: { envBoost: 2.3 } }),
@@ -40,9 +42,29 @@ function makeMaterials() {
       depthWrite: false,
       side: THREE.DoubleSide,
     }),
-    felt: new THREE.MeshStandardMaterial({ color: '#e3e3e8', roughness: 0.95 }),
-    lightbox: new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.42, roughness: 0.9 }),
-    diffuser: lightMat('#ffffff', 1.5),
+    // fine woven fabric in a warm light grey, which suits every finish
+    felt: new THREE.MeshPhysicalMaterial({
+      map: fabric.map,
+      normalMap: fabric.normalMap,
+      roughnessMap: fabric.roughnessMap,
+      roughness: 1,
+      sheen: 0.6,
+      sheenRoughness: 0.5,
+      sheenColor: '#ffffff',
+    }),
+    // perforated aluminium with warm light behind the holes; tinted by the finish
+    grille: new THREE.MeshStandardMaterial({
+      color: FINISHES.silver.body,
+      metalness: 1,
+      roughness: 0.5,
+      map: grille.map,
+      normalMap: grille.normalMap,
+      emissive: '#fff1de',
+      emissiveMap: grille.glowMap,
+      emissiveIntensity: 2,
+      userData: { envBoost: 1 },
+    }),
+    lightPanel: lightMat('#ffffff', 1.7, lightPanelTexture()),
     whiteLine: lightMat('#ffffff', 1.2),
     statusLine: lightMat('#ffffff', 1.2),
     buttonGlow: lightMat('#ffffff', 1.2),
@@ -234,9 +256,30 @@ export function buildCabinet(scene, world, physMaterials) {
   add(flap);
 
   // ------------------------------------------------------------ play floor
+  // one L-shaped slab around the shaft; its UVs are in metres (see fabricTextures)
+  const felt = extrude(
+    outline([
+      [-I, -I, 0],
+      [I, -I, 0],
+      [I, I, 0],
+      [CHUTE.maxX, I, 0],
+      [CHUTE.maxX, CHUTE.minZ, 0],
+      [-I, CHUTE.minZ, 0],
+    ]),
+    FLOOR_Y - 0.012,
+    FLOOR_Y,
+    M.felt,
+  );
+  felt.castShadow = false;
+  add(felt);
+  // polished trim where the fabric meets the glass
+  const trim = 0.005;
+  const trimTop = FLOOR_Y + 0.002;
   add(
-    span(M.felt, [-I, I], [FLOOR_Y - 0.012, FLOOR_Y], [-I, CHUTE.minZ - 0.001], { cast: false }),
-    span(M.felt, [CHUTE.maxX + 0.001, I], [FLOOR_Y - 0.012, FLOOR_Y], [CHUTE.minZ - 0.001, I], { cast: false }),
+    span(M.steel, [-I - trim, I + trim], [FLOOR_Y - 0.004, trimTop], [-I - trim, -I], { cast: false }),
+    span(M.steel, [I, I + trim], [FLOOR_Y - 0.004, trimTop], [-I, I + trim], { cast: false }),
+    span(M.steel, [CHUTE.maxX, I], [FLOOR_Y - 0.004, trimTop], [I, I + trim], { cast: false }),
+    span(M.steel, [-I - trim, -I], [FLOOR_Y - 0.004, trimTop], [-I, CHUTE.minZ], { cast: false }),
   );
   staticSpan(world, physMaterials.static, [-H, H], [FLOOR_Y - 0.1, FLOOR_Y], [-H, CHUTE.minZ]);
   staticSpan(world, physMaterials.static, [CHUTE.maxX, H], [FLOOR_Y - 0.1, FLOOR_Y], [CHUTE.minZ, H]);
@@ -280,10 +323,11 @@ export function buildCabinet(scene, world, physMaterials) {
   // polished glass edges where the panes meet
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(box(0.0026, paneH, 0.0026, M.glassEdge, sx * g, paneY, sz * g, { cast: false, receive: false }));
 
-  // the back is a lightbox: an evenly lit white field behind the toys.
-  // It faces the player only, so the machine stays see-through from behind.
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), M.lightbox);
+  // the back is a perforated aluminium grille lit from behind. It faces the
+  // player only, so the machine stays see-through from behind.
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(I * 2, paneH), M.grille);
   back.position.set(0, paneY, -I - 0.002);
+  back.receiveShadow = true;
   add(back);
 
   // ------------------------------------------------------------ lid
@@ -291,11 +335,16 @@ export function buildCabinet(scene, world, physMaterials) {
   add(edgeLine(rect(-H - 0.0004, H + 0.0004, -H - 0.0004, H + 0.0004, CORNER), CEIL_Y + LID, 0.0022, M.steel));
   // status light: a single line of light under the lid
   add(edgeLine(rect(-H + 0.009, H - 0.009, -H + 0.009, H - 0.009, CORNER - 0.009), CEIL_Y - 0.0035, 0.0024, M.statusLine));
-  // diffuser across the whole ceiling
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(g * 2, g * 2), M.diffuser);
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEIL_Y - 0.002, 0);
-  add(ceiling);
+  // light panel set back in a thin aluminium frame
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(g * 2, g * 2), M.lightPanel);
+  panel.rotation.x = Math.PI / 2;
+  panel.position.set(0, CEIL_Y - 0.002, 0);
+  add(panel);
+  const frameShape = outline(rect(-g, g, -g, g, CORNER - 0.02));
+  frameShape.holes.push(outline(rect(-g + 0.012, g - 0.012, -g + 0.012, g - 0.012, CORNER - 0.032), new THREE.Path()));
+  const frame = extrude(frameShape, CEIL_Y - 0.01, CEIL_Y, M.body);
+  frame.castShadow = false;
+  add(frame);
   // the name, engraved
   const wordmark = new THREE.Mesh(
     new THREE.PlaneGeometry(0.26, 0.0325),
@@ -363,6 +412,7 @@ export function buildCabinet(scene, world, physMaterials) {
   function setFinish(key) {
     const f = FINISHES[key] ?? FINISHES.silver;
     M.body.color.set(f.body);
+    M.grille.color.set(f.body);
     accent = new THREE.Color(f.accent);
     accentHex = f.accent;
   }

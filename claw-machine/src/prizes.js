@@ -3,7 +3,7 @@ import * as CANNON from 'cannon-es';
 import { CHUTE, FLOOR_Y } from './config.js';
 import { GROUP } from './physics.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { stripeTexture } from './textures.js';
+import { stripeTexture, fleeceTexture } from './textures.js';
 
 // ------------------------------------------------------------ shared assets
 const SPHERE = new THREE.SphereGeometry(1, 20, 14);
@@ -27,6 +27,8 @@ const plush = (hex) =>
     new THREE.MeshPhysicalMaterial({
       color: hex,
       roughness: 0.92,
+      normalMap: fleeceTexture(),
+      normalScale: new THREE.Vector2(0.3, 0.3),
       sheen: 1,
       sheenRoughness: 0.45,
       sheenColor: lighten(hex, 0.55),
@@ -169,6 +171,9 @@ const STAR_GEO = (() => {
   }
   const geo = new THREE.ExtrudeGeometry(s, { depth: 0.022, bevelEnabled: true, bevelSize: 0.009, bevelThickness: 0.01, bevelSegments: 4, curveSegments: 4 });
   geo.center();
+  // UVs come in metres; stretch them to the fleece scale a sphere gets
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3, uv.getY(i) * 3);
   return geo;
 })();
 
